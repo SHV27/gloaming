@@ -71,16 +71,16 @@ body::after {
 
 @layer components {
   .btn-primary {
-    @apply rounded-lg bg-ember px-4 py-2.5 font-display text-sm tracking-widest text-void shadow-ember transition hover:bg-ember-bright hover:shadow-ember-lg;
+    @apply rounded-lg bg-ember px-4 py-2.5 font-display text-sm tracking-widest text-void shadow-ember transition-all duration-150 hover:bg-ember-bright hover:shadow-ember-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-95;
   }
   .btn-secondary {
-    @apply rounded-lg border border-ember px-4 py-2.5 font-display text-sm tracking-widest text-ember transition hover:bg-ember/10;
+    @apply rounded-lg border border-ember px-4 py-2.5 font-display text-sm tracking-widest text-ember transition-all duration-150 hover:bg-ember/10 active:scale-95;
   }
   .btn-ghost {
-    @apply rounded-lg border border-rot/60 px-3 py-2 font-body text-sm text-bone transition hover:border-ember hover:text-ember disabled:cursor-not-allowed disabled:opacity-30;
+    @apply rounded-lg border border-rot/60 px-3 py-2 font-body text-sm text-bone transition-all duration-150 hover:border-ember hover:text-ember active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:active:scale-100;
   }
   .btn-ritual {
-    @apply rounded-lg border-2 border-ember bg-ember/10 px-4 py-2.5 font-display text-sm tracking-widest text-ember-bright shadow-ember transition hover:bg-ember/20;
+    @apply rounded-lg border-2 border-ember bg-ember/10 px-4 py-2.5 font-display text-sm tracking-widest text-ember-bright shadow-ember transition-all duration-150 hover:bg-ember/20 hover:-translate-y-0.5 active:translate-y-0 active:scale-95;
   }
 }
 

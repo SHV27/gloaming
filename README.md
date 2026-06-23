@@ -30,6 +30,31 @@ The board talks. It addresses players **by name**, references where you are and 
 
 A refresh never kills a game — state persists to `localStorage`.
 
+## Feel & onboarding
+
+It teaches itself. Pick **Guided Game** and the board walks you through your first turn *in its own voice*
+("Move toward the light. Now search — but greed wakes me."), one mechanic at a time, with contextual
+just-in-time tips the first time you see a Tainted tile, a Hollow, or a Ward. There's an always-available
+**How to Play** that *shows* rather than tells. A stranger can open the link cold and be playing in one turn.
+
+And it's *alive*: a churning living-fog Gloom with tendrils that reach for you, gliding tokens with light
+trails, a breathing Heart, ember particles, screenshake and freeze-frames on the big beats, and a fully
+**procedural Web-Audio** score — an ambient drone, a heartbeat that quickens with Dread, a Hollow approach
+stinger, Ward chimes, and warm/sour tones as you push your luck. All of it respects `prefers-reduced-motion`,
+and there's a global mute.
+
+## Make it yours (cosmetics — never pay-to-win)
+
+Earn board/Gloom **color themes by playing** (escape once → *Emberfall*; play three → *Bonefrost*; light all
+three Wards → *Wormwood*) and equip them in **Your Ledger**, which also tracks your games, escapes, longest
+survival, and favorite Survivor. Cosmetics are purely visual and never touch the rules — see
+[`MONETIZATION.md`](./MONETIZATION.md) for the honest, player-first model.
+
+## Share your run
+
+Every ending renders a downloadable **Ledger run-card** (PNG) — your scenario, who escaped, who was Claimed,
+and the board's verdict — built to drop in the group chat. Pasted links unfurl with custom art and a hook.
+
 ## Run it locally
 
 ```bash

@@ -46,6 +46,26 @@
   lantern/dread sabotage. Absent in 2P (whisperMode forced off when <3 players).
 - Save bumped to `gloaming-save-v3` (Player gains `role`; new scenario/foresight/finite fields).
 
+## Session 4 (v4 — "Ship & Shine", final) notes
+- **Audio** is 100% procedural Web Audio (`src/audio/sound.ts`) — no asset files, no network, every call
+  try/caught so it can never break the build. Context resumes on first `pointerdown` (autoplay-safe).
+- **Juice** is decoupled from logic: `useFx` store (shake/punch/flash/particle bursts) + `FxLayer` wrapper;
+  `GameFx` is a mount-once component that *diffs* game state each render and fires sound + fx + bursts. The
+  pure store stays clean. `prefers-reduced-motion` → `<MotionConfig reducedMotion="user">` globally, shake→
+  flash, ambient embers stilled, burst counts clamped.
+- **Tokens glide** by rendering players/Hollows in a top-level layer of `motion.g` animating to node coords
+  (spring) instead of redrawing per-node — gives continuity.
+- **Teaching:** Guided coach in `GameScreen` derives the in-voice instruction from state (auto-advances, no
+  manual dismiss) for the first ~2 rounds; JIT tips (first Tainted/Hollow/Ward) via the `useHints` once-store.
+- **Cosmetics/profile** are separate persisted stores (`gloaming-profile-v1`) so they survive game resets and
+  saves. Themes recolor via CSS vars (`--ember`, `--ember-bright`, `--gloam-rot`) + the board accent fallback.
+- **Persistence hardened:** game store `merge` validates the board shape and falls back to fresh state → a
+  corrupt/stale save can't white-screen. Plus a top-level `ErrorBoundary` with an in-world "clear & restart".
+- **OG image is `public/og.svg`.** Modern crawlers (Slack/Discord/Telegram/X) render it; LinkedIn/WhatsApp
+  may want a PNG — rasterizing og.svg→og.png is the one follow-up for perfect unfurl everywhere (no tooling
+  in this env to rasterize cleanly; didn't want to risk the build installing native image libs).
+- Lazy-loaded overlays (HauntReveal/WhisperScreen/HowToPlay/Ledger) are code-split chunks; initial JS ~115kB gz.
+
 ## Cut for time (ask for these next session)
 - Audio (ambient drone, dice, whispers) — hook left, behind a mute toggle.
 - Seeded/random board layouts — currently one hand-tuned 21-node board.

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "@/store/game";
+import { useProfile } from "@/store/profile";
 import { ROLE_LIST, ROLES } from "@/game/roles";
 import type { RoleId } from "@/game/roles";
+import Wardrobe from "./Wardrobe";
 
 interface Slot {
   name: string;
@@ -11,8 +13,11 @@ interface Slot {
 
 const DEFAULTS: RoleId[] = ["lampwright", "cartographer", "warden", "forsaken"];
 
-export default function Lobby() {
+export default function Lobby({ onHelp }: { onHelp?: () => void }) {
   const newGame = useGame((s) => s.newGame);
+  const guided = useProfile((s) => s.guided);
+  const setGuided = useProfile((s) => s.setGuided);
+  const [wardrobe, setWardrobe] = useState(false);
   const [slots, setSlots] = useState<Slot[]>([
     { name: "", role: "lampwright" },
     { name: "", role: "cartographer" },
@@ -81,10 +86,30 @@ export default function Lobby() {
           </span>
         </label>
 
+        {/* Guided vs Straight In */}
+        <div className="flex items-center gap-2 rounded-lg border border-rot/50 bg-void/40 p-1.5">
+          {([["Guided Game", true], ["Straight In", false]] as const).map(([label, val]) => (
+            <button key={label} onClick={() => setGuided(val)} className="flex-1 rounded-md py-2 font-mono text-[0.7rem] uppercase tracking-widest transition"
+              style={{ background: guided === val ? "var(--ember)" : "transparent", color: guided === val ? "#0A0710" : "#8C8398" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="-mt-1 px-1 font-body text-[0.72rem] italic text-ash/70">
+          {guided ? "The board will teach you your first turn, in its own voice." : "No tutorial. The dark will not be gentle."}
+        </p>
+
         <button onClick={() => canStart && newGame(valid, whisper)} disabled={!canStart} className="w-full rounded-xl bg-ember py-3.5 font-display text-lg font-semibold tracking-widest text-void shadow-ember transition enabled:hover:bg-ember-bright enabled:hover:shadow-ember-lg disabled:cursor-not-allowed disabled:opacity-30">
           ENTER THE GLOAMING
         </button>
+
+        <div className="flex gap-2">
+          <button onClick={onHelp} className="flex-1 rounded-lg border border-rot/50 py-2 font-mono text-[0.7rem] uppercase tracking-widest text-ash transition hover:border-ember hover:text-ember">How to Play</button>
+          <button onClick={() => setWardrobe(true)} className="flex-1 rounded-lg border border-rot/50 py-2 font-mono text-[0.7rem] uppercase tracking-widest text-ash transition hover:border-ember hover:text-ember">Your Ledger</button>
+        </div>
       </motion.div>
+
+      {wardrobe && <Wardrobe onClose={() => setWardrobe(false)} />}
 
       <p className="relative mt-6 max-w-sm text-center font-body text-xs italic text-ash/60">2 players: pure co-op against the board. 3&ndash;4: co-op, with a knife in the dark.</p>
     </div>

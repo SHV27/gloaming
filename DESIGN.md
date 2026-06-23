@@ -122,6 +122,36 @@ everyone alive escape (no finite payoff). S3 fills exactly these, without regres
   as data (`buildLedger`) for S4's shareable card.
 - Save bumped to **v3** (Player gains `role`; new scenario/foresight fields).
 
+---
+
+## v4 — "Ship & Shine" (Session 4, final) — launch review + verdict
+
+**CEO launch review of the v3 build (below-bar items):** (1) the board is mechanically alive but
+*sensorially* dead — no sound, no screenshake/hitstop, tokens snap between nodes, success/danger aren't
+dramatized. (2) Onboarding is first-time tooltips only — no diegetic teach-by-doing, no "How to Play". (3)
+No virality surface — the Ledger isn't shareable, no OG/social unfurl, no favicon. (4) No error boundary;
+a corrupt save could white-screen. (5) No monetization architecture (cosmetics/profile). (6) Touch/keyboard
+a11y unproven.
+
+**Locked plan (build, then polish to §5, then STOP):**
+- **A. Juice:** procedural Web-Audio SFX (heartbeat that quickens with Dread, Hollow approach stinger,
+  Ward chime, Haunt sting, warm/sour push-luck draw tones, ambient drone; global mute; starts on first
+  gesture). Screenshake + hitstop scaled to event weight; ambient drifting embers; ember/mote bursts on
+  Light gain, Ward ignite, Gloom advance, Hollow strike; tokens glide along edges with a spring + trail;
+  Heart breathes (quickens with Dread). All gated by `prefers-reduced-motion` (shake→flash).
+- **B. Teaches itself:** lobby "Guided Game" vs "Straight In". Guided = the board coaches the first turn
+  in-voice, one mechanic at a time, gated to the legal action. JIT in-world tips on first Tainted / first
+  Hollow / first Ward-in-reach (once, dismissable). Always-available "How to Play" (shows, in voice).
+  Zero states speak ("No Light. Search, or take from the Lantern.").
+- **C. Spread + ship:** Ledger → downloadable/shareable **run card PNG** (canvas export). OG/Twitter meta +
+  theme-color + favicon + og image + one-screen attract hero. QA: error boundary (in-world fallback),
+  versioned migration-safe persistence, touch hit-areas, keyboard-movable nodes + ARIA, lazy-loaded overlays,
+  reduced-motion, README (story + shots) + LICENSE.
+- **D. Monetization-READY (no live payments, no dark patterns):** data-driven **cosmetics** (board/Gloom
+  color themes) that never touch play; local **profile/stats** (games, escapes, longest survival, favorite
+  Survivor) + 2–3 cosmetics **unlocked by playing**; `MONETIZATION.md` documenting the cosmetic-only,
+  player-first model and the someday-paid "Director's Cut". Save bumped to v4.
+
 ## Architecture (locked, per §3)
 `src/game` (types, board, decks, scenarios, narrator, engine helpers) · `src/store` (zustand + persist) ·
 `src/components` (Lobby, Board, NarratorBar, PlayerPanel, CardDraw, OmenTrack, HauntReveal, WhisperScreen,

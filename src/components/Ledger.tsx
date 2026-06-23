@@ -1,19 +1,37 @@
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "@/store/game";
 import { buildLedger } from "@/game/ledger";
+import { shareLedgerCard } from "@/game/shareCard";
+import { useProfile } from "@/store/profile";
+import { themeById } from "@/game/cosmetics";
 
 export default function Ledger() {
-  const players = useGame((s) => s.players);
-  const scenarioName = useGame((s) => s.scenarioName);
-  const round = useGame((s) => s.round);
-  const result = useGame((s) => s.result);
-  const dread = useGame((s) => s.dread);
-  const finite = useGame((s) => s.finite);
-  const reset = useGame((s) => s.reset);
+  const s = useGame();
+  const { players, scenarioName, round, result, dread, finite, reset } = s;
+  const recordRun = useProfile((p) => p.recordRun);
+  const [unlocked, setUnlocked] = useState<string[]>([]);
+  const recorded = useRef(false);
 
   const won = result === "win";
   const ledger = buildLedger({ players, scenarioName, finite, rounds: round, won, dread });
   const fateColor = (f: string) => (f === "escaped" ? "#8BE0B0" : f === "betrayed" ? "#C2412D" : "#8C8398");
+
+  useEffect(() => {
+    if (recorded.current) return;
+    recorded.current = true;
+    const litAll = s.board.wardIds.filter((w) => w !== s.mimicWardId).every((w) => (s.wardProgress[w] ?? 0) >= s.wardGoal);
+    const newly = recordRun({
+      won,
+      rounds: round,
+      scenario: scenarioName,
+      roles: players.map((p) => p.role),
+      litAllWards: litAll,
+      escapedCount: players.filter((p) => p.escaped).length,
+    });
+    if (newly.length) setUnlocked(newly);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="relative mx-auto flex min-h-[100svh] max-w-2xl flex-col items-center justify-center px-6 py-16">
@@ -78,15 +96,20 @@ export default function Ledger() {
         ))}
       </motion.div>
 
-      <motion.button
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1 + ledger.verses.length * 0.5 }}
-        onClick={reset}
-        className="relative mt-12 rounded-xl bg-ember px-10 py-3.5 font-display text-lg tracking-widest text-void shadow-ember transition hover:bg-ember-bright hover:shadow-ember-lg"
-      >
-        AGAIN, IN THE DARK
-      </motion.button>
+      {unlocked.length > 0 && (
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 + ledger.verses.length * 0.5 }} className="relative mt-6 font-mono text-xs uppercase tracking-widest text-ember">
+          ✦ unlocked: {unlocked.map((id) => themeById(id).name).join(", ")} — equip it in Your Ledger
+        </motion.p>
+      )}
+
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 + ledger.verses.length * 0.5 }} className="relative mt-10 flex flex-wrap items-center justify-center gap-3">
+        <button onClick={() => shareLedgerCard(ledger, scenarioName, won)} className="rounded-xl border border-ember px-7 py-3.5 font-display tracking-widest text-ember transition hover:bg-ember/10">
+          SHARE YOUR RUN
+        </button>
+        <button onClick={reset} className="rounded-xl bg-ember px-10 py-3.5 font-display text-lg tracking-widest text-void shadow-ember transition hover:bg-ember-bright hover:shadow-ember-lg">
+          AGAIN, IN THE DARK
+        </button>
+      </motion.div>
     </div>
   );
 }

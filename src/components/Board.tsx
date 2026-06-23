@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import type { Board as BoardT, Hollow, NodeState, Player } from "@/game/types";
 import { neighbors, shortestPath } from "@/game/board";
+import { useFx, reducedMotion, type Burst as BurstT } from "@/store/fx";
 
 interface Props {
   board: BoardT;
@@ -47,6 +48,8 @@ export default function Board({
 }: Props) {
   const reach = current ? new Set(neighbors(board, current.nodeId)) : new Set<string>();
   const foresightSet = new Set(foresight);
+  const bursts = useFx((s) => s.bursts);
+  const clearBurst = useFx((s) => s.clearBurst);
   const playersOn = (id: string) => players.filter((p) => p.nodeId === id && p.alive && !p.escaped);
   const heartBright = 0.5 + (litWards / Math.max(1, board.wardIds.length)) * 0.5;
   const targets = players.filter((p) => p.alive && !p.escaped);
@@ -214,11 +217,20 @@ export default function Board({
         const wardLit = isWard && (wardProgress[n.id] ?? 0) >= wardGoal;
         const r = isHeart ? 27 : isWard ? 19 : n.kind === "cache" ? 15 : 12;
         const rim = st === "flooded" ? "#5a4a78" : st === "tainted" ? "#6b4ea0" : isHeart ? "#F5A623" : isWard ? (wardLit ? "#FFD27A" : "#8C7BB0") : n.kind === "cache" ? "#8BE0B0" : n.kind === "hazard" ? "#9a4a3a" : "#3B2A57";
-        const occupants = playersOn(n.id);
         const interactive = movable || burnable;
+        const act = () => (movable ? onMove(n.id) : burnable ? onBurn(n.id) : undefined);
 
         return (
-          <g key={n.id} onClick={() => (movable ? onMove(n.id) : burnable ? onBurn(n.id) : undefined)} style={{ cursor: interactive ? "pointer" : "default" }}>
+          <g
+            key={n.id}
+            onClick={act}
+            tabIndex={interactive ? 0 : -1}
+            role={interactive ? "button" : undefined}
+            aria-label={interactive ? `${movable ? "Move to" : "Burn back the Gloom at"} ${n.label ?? n.kind}` : undefined}
+            onKeyDown={(e) => { if (interactive && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); act(); } }}
+            style={{ cursor: interactive ? "pointer" : "default" }}
+          >
+            {interactive && <circle cx={n.x} cy={n.y} r={r + 16} fill="transparent" style={{ touchAction: "manipulation" }} />}
             {movable && (
               <motion.circle cx={n.x} cy={n.y} r={r + 11} fill="none" stroke="#FFD27A" strokeWidth={2} strokeDasharray="3 5"
                 animate={{ opacity: [0.4, 1, 0.4], rotate: 360 }}
@@ -257,42 +269,87 @@ export default function Board({
 
             {!isHeart && !isWard && n.kind === "cache" && st === "lit" && <circle cx={n.x} cy={n.y} r={4} fill="#8BE0B0" opacity={0.85} />}
             {!isHeart && !isWard && n.kind === "hazard" && st === "lit" && <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize={12} fill="#9a4a3a" fontFamily="'Space Mono'">✕</text>}
-
-            {/* player tokens */}
-            {occupants.map((p, i) => {
-              const off = occupants.length > 1 ? (i - (occupants.length - 1) / 2) * 16 : 0;
-              return (
-                <g key={p.id}>
-                  <circle cx={n.x + off} cy={n.y - r - 12} r={9} fill={p.color} filter="url(#soft)" opacity={0.5} />
-                  <motion.circle cx={n.x + off} cy={n.y - r - 12} r={7} fill={p.color} stroke="#0A0710" strokeWidth={2}
-                    animate={p.marked ? { opacity: [1, 0.35, 1] } : { opacity: 1 }} transition={p.marked ? { duration: 0.7, repeat: Infinity } : {}} />
-                  {current?.id === p.id && (
-                    <circle cx={n.x + off} cy={n.y - r - 12} r={11} fill="none" stroke={p.color} strokeWidth={1.5}>
-                      <animate attributeName="r" dur="1.4s" values="9;13;9" repeatCount="indefinite" />
-                      <animate attributeName="opacity" dur="1.4s" values="1;0;1" repeatCount="indefinite" />
-                    </circle>
-                  )}
-                  {p.marked && <text x={n.x + off} y={n.y - r - 22} textAnchor="middle" fontSize={9} fill="#C2412D" fontFamily="'Space Mono'">marked</text>}
-                </g>
-              );
-            })}
           </g>
         );
       })}
 
-      {/* Hollows — predators, drawn last so they sit on top */}
+      {/* Hollows — predators glide toward their prey */}
       {hollows.map((h) => {
         const n = board.nodes.find((x) => x.id === h.nodeId)!;
         return (
-          <g key={h.id}>
-            <motion.circle cx={n.x} cy={n.y} r={15} fill="#0A0710" stroke="#C2412D" strokeWidth={2} filter="url(#glow)"
-              animate={{ scale: [1, 1.12, 1] }} transition={{ duration: 1.3, repeat: Infinity }} style={{ transformOrigin: `${n.x}px ${n.y}px` }} />
-            <circle cx={n.x - 4} cy={n.y - 2} r={2} fill="#C2412D" />
-            <circle cx={n.x + 4} cy={n.y - 2} r={2} fill="#C2412D" />
-            <path d={`M ${n.x - 5} ${n.y + 5} Q ${n.x} ${n.y + 2} ${n.x + 5} ${n.y + 5}`} stroke="#C2412D" strokeWidth={1.3} fill="none" />
-          </g>
+          <motion.g key={h.id} initial={false} animate={{ x: n.x, y: n.y }} transition={{ type: "spring", stiffness: 90, damping: 16 }}>
+            <motion.circle r={15} fill="#0A0710" stroke="#C2412D" strokeWidth={2} filter="url(#glow)" animate={{ scale: [1, 1.12, 1] }} transition={{ duration: 1.3, repeat: Infinity }} />
+            <circle cx={-4} cy={-2} r={2} fill="#C2412D" />
+            <circle cx={4} cy={-2} r={2} fill="#C2412D" />
+            <path d="M -5 5 Q 0 2 5 5" stroke="#C2412D" strokeWidth={1.3} fill="none" />
+          </motion.g>
         );
       })}
+
+      {/* Player tokens — glide along the edges with a spring, settle, glow */}
+      {players.filter((p) => p.alive && !p.escaped).map((p) => {
+        const n = board.nodes.find((x) => x.id === p.nodeId)!;
+        const group = playersOn(p.nodeId);
+        const i = group.findIndex((g) => g.id === p.id);
+        const off = group.length > 1 ? (i - (group.length - 1) / 2) * 16 : 0;
+        return (
+          <motion.g key={p.id} initial={false} animate={{ x: n.x + off, y: n.y - 34 }} transition={{ type: "spring", stiffness: 140, damping: 15 }}>
+            <circle r={9} fill={p.color} filter="url(#soft)" opacity={0.5} />
+            <motion.circle r={7} fill={p.color} stroke="#0A0710" strokeWidth={2} animate={p.marked ? { opacity: [1, 0.3, 1] } : { opacity: 1 }} transition={p.marked ? { duration: 0.6, repeat: Infinity } : {}} />
+            {current?.id === p.id && (
+              <circle r={11} fill="none" stroke={p.color} strokeWidth={1.5}>
+                <animate attributeName="r" dur="1.4s" values="9;13;9" repeatCount="indefinite" />
+                <animate attributeName="opacity" dur="1.4s" values="1;0;1" repeatCount="indefinite" />
+              </circle>
+            )}
+            {p.marked && <text y={-16} textAnchor="middle" fontSize={9} fill="#C2412D" fontFamily="'Space Mono'">marked</text>}
+          </motion.g>
+        );
+      })}
+
+      {/* ambient embers — the board breathes (stilled for reduced-motion) */}
+      {!reducedMotion && embers.map((e, i) => (
+        <circle key={`em-${i}`} cx={e.x} cy={e.y} r={e.r} fill="#F5A623" opacity={0}>
+          <animate attributeName="opacity" values="0;0.5;0" dur={`${e.dur}s`} begin={`${e.delay}s`} repeatCount="indefinite" />
+          <animate attributeName="cy" values={`${e.y};${e.y - 60}`} dur={`${e.dur}s`} begin={`${e.delay}s`} repeatCount="indefinite" />
+        </circle>
+      ))}
+
+      {/* event particle bursts (Light gained, Ward lit, Gloom advance, strikes) */}
+      {bursts.map((b) => <BurstFx key={b.id} burst={b} onDone={() => clearBurst(b.id)} />)}
     </svg>
+  );
+}
+
+const embers = Array.from({ length: 16 }).map(() => ({
+  x: 80 + Math.random() * 840,
+  y: 120 + Math.random() * 540,
+  r: 0.8 + Math.random() * 1.6,
+  dur: 6 + Math.random() * 7,
+  delay: Math.random() * 8,
+}));
+
+function BurstFx({ burst, onDone }: { burst: BurstT; onDone: () => void }) {
+  const parts = Array.from({ length: burst.n }).map((_, i) => {
+    const a = (i / burst.n) * Math.PI * 2 + Math.random();
+    const dist = 18 + Math.random() * 34;
+    return { dx: Math.cos(a) * dist, dy: Math.sin(a) * dist, r: 1 + Math.random() * 2.4 };
+  });
+  return (
+    <g>
+      {parts.map((p, i) => (
+        <motion.circle
+          key={i}
+          cx={burst.x}
+          cy={burst.y}
+          r={p.r}
+          fill={burst.color}
+          initial={{ opacity: 0.95, x: 0, y: 0 }}
+          animate={{ opacity: 0, x: p.dx, y: burst.kind === "ward" ? p.dy - 20 : p.dy }}
+          transition={{ duration: 0.8 + Math.random() * 0.4, ease: "easeOut" }}
+          onAnimationComplete={i === 0 ? onDone : undefined}
+        />
+      ))}
+    </g>
   );
 }

@@ -1,8 +1,11 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useGame, scenarioById } from "@/store/game";
 import { useHints } from "@/store/hints";
+import { useProfile } from "@/store/profile";
 import { role as roleDef } from "@/game/roles";
 import { gloomSpread, gloomSpreadCount } from "@/game/gloom";
+import { neighbors, shortestPath } from "@/game/board";
+import { themeById } from "@/game/cosmetics";
 import Board from "./Board";
 import NarratorBar from "./NarratorBar";
 import StatusBar from "./StatusBar";
@@ -10,9 +13,12 @@ import StatusBar from "./StatusBar";
 export default function GameScreen() {
   const s = useGame();
   const { seen, see } = useHints();
+  const guided = useProfile((st) => st.guided);
+  const themeId = useProfile((st) => st.theme);
   const current = s.players[s.turnIndex];
   if (!current) return null;
   const cr = roleDef(current.role);
+  const boardAccent = s.accentColor ?? themeById(themeId).vars.accent;
 
   const litWards = s.board.wardIds.filter((w) => (s.wardProgress[w] ?? 0) >= s.wardGoal).length;
   const onWard = s.board.wardIds.includes(current.nodeId) && (s.wardProgress[current.nodeId] ?? 0) < s.wardGoal;
@@ -34,16 +40,34 @@ export default function GameScreen() {
     foresight = [...res.toFlooded, ...res.toTainted];
   }
 
-  // first-time teaching: role ability + core actions
+  // contextual situational awareness
+  const wardInReach = s.board.wardIds.some((w) => (current ? neighbors(s.board, current.nodeId).includes(w) || current.nodeId === w : false) && (s.wardProgress[w] ?? 0) < s.wardGoal);
+  const adjacentDanger = current ? neighbors(s.board, current.nodeId).some((m) => (s.nodeState[m] ?? "lit") !== "lit") : false;
+  let hollowMin = 99;
+  s.players.filter((p) => p.alive && !p.escaped).forEach((p) => s.hollows.forEach((h) => { const d = shortestPath(s.board, h.nodeId, p.nodeId).length - 1; if (d >= 0 && d < hollowMin) hollowMin = d; }));
+
+  // GUIDED coach — the board walks you through the first turns, in-voice, gated to the legal action.
+  const coaching = guided && s.turnCount < s.players.length * 2;
+  let coach: string | null = null;
+  if (coaching) {
+    if (!s.rolled) coach = "Begin, child. Roll the worn die — those are your steps through my dark.";
+    else if (canRitual) coach = "The Heart is open. Speak the Ritual here. Finish it, and you walk out of me.";
+    else if (canKindle) coach = "You stand on a Ward. Kindle it — pour your Light in. Three Wards lit, and the Heart opens. Together, now.";
+    else if (canMove && s.movesLeft > 0 && !s.acted) coach = "Move toward the light. Tap a glowing tile. Keep to the lit ground — the violet bites.";
+    else if (canAct) coach = "Now search this place for Light. Press your luck if you're brave… but greed wakes me.";
+    else if (s.acted) coach = "Good. End your turn — and let me take mine.";
+  }
+
+  // first-time / just-in-time teaching (once each)
   const hints: { id: string; on: boolean; text: string }[] = [
     { id: `role-${current.role}`, on: s.rolled && !s.acted, text: cr.hint },
-    { id: "roll", on: !s.rolled, text: "Roll, then click a glowing path-tile to move. Lit tiles are safe; violet ones cost more and bite." },
-    { id: "search", on: s.rolled && !s.acted && !onWard && !canRitual, text: "Search a tile to dig for Light. Press your luck for more — but draw too many Omens in one Search and the tile collapses, spawning a Hollow." },
-    { id: "kindle", on: canKindle, text: "You're on a Ward. Kindle it with Light. Light all the true Wards (together, over several turns) to open the Heart." },
-    { id: "ritual", on: canRitual, text: "The Heart is open. Speak the Ritual here — finish all its steps before Dread hits 100." },
-    { id: "hunt", on: s.hollows.length > 0 && !s.acted, text: "The red trail is a Hollow's path — it steps toward the nearest living survivor each round. Get hit and you're Wounded and Marked." },
+    { id: "tainted", on: adjacentDanger, text: "That violet tile is Tainted — the Gloom is creeping in. It costs more to enter, and black (Flooded) tiles drink your Light. Burn it back, or go around." },
+    { id: "hunt", on: hollowMin <= 2, text: "A Hollow is close. The red trail is exactly where it steps next round. Reach it and you're Wounded and Marked — don't be standing in its path." },
+    { id: "ward", on: wardInReach, text: "A Ward is within reach. Stand on it and Kindle it with Light. Three true Wards lit opens the Heart." },
+    { id: "search", on: s.rolled && !s.acted && !onWard && !canRitual, text: "Search a tile to dig for Light. Press your luck for more — but a second Omen in one Search collapses the tile and spawns a Hollow." },
+    { id: "ritual", on: canRitual, text: "The Heart is open. Speak the Ritual here — finish every step before Dread hits 100." },
   ];
-  const hint = hints.find((h) => h.on && !seen[h.id]);
+  const hint = !coach ? hints.find((h) => h.on && !seen[h.id]) : undefined;
 
   return (
     <div className="flex min-h-[100svh] flex-col lg:h-[100svh] lg:overflow-hidden">
@@ -85,7 +109,7 @@ export default function GameScreen() {
               movesLeft={s.movesLeft}
               canMove={canMove}
               canBurn={canBurn}
-              accent={s.accentColor}
+              accent={boardAccent}
               heartOpen={s.heartOpen}
               foresight={foresight}
               mimicRevealed={s.mimicRevealed ? s.mimicWardId : null}
@@ -93,13 +117,18 @@ export default function GameScreen() {
               onBurn={s.burnBack}
             />
 
-            <AnimatePresence>
-              {hint && (
-                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute bottom-3 left-1/2 z-10 w-[min(92%,30rem)] -translate-x-1/2 rounded-xl border border-ember/60 bg-deep/95 px-4 py-3 shadow-ember backdrop-blur">
+            <AnimatePresence mode="wait">
+              {coach ? (
+                <motion.div key={coach} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute bottom-3 left-1/2 z-10 w-[min(94%,32rem)] -translate-x-1/2 rounded-xl border-2 border-ember/70 bg-deep/95 px-5 py-3.5 shadow-ember-lg backdrop-blur">
+                  <p className="mb-0.5 font-mono text-[0.55rem] uppercase tracking-[0.3em] text-ember">the board guides you</p>
+                  <p className="font-body text-[0.95rem] italic leading-snug text-bone">{coach}</p>
+                </motion.div>
+              ) : hint ? (
+                <motion.div key={hint.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute bottom-3 left-1/2 z-10 w-[min(92%,30rem)] -translate-x-1/2 rounded-xl border border-ember/60 bg-deep/95 px-4 py-3 shadow-ember backdrop-blur">
                   <p className="font-body text-sm leading-snug text-bone">{hint.text}</p>
                   <button onClick={() => see(hint.id)} className="mt-2 font-mono text-[0.65rem] uppercase tracking-widest text-ember transition hover:text-ember-bright">got it ✓</button>
                 </motion.div>
-              )}
+              ) : null}
             </AnimatePresence>
           </div>
 

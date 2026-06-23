@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="18%" r="90%">
+      <stop offset="0%" stop-color="#1a0f2b"/>
+      <stop offset="55%" stop-color="#0A0710"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="34%" r="34%">
+      <stop offset="0%" stop-color="#F5A623" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#F5A623" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <circle cx="600" cy="214" r="120" fill="none" stroke="#3B2A57" stroke-width="2"/>
+  <circle cx="600" cy="214" r="70" fill="none" stroke="#6b4ea0" stroke-width="1.5" opacity="0.6"/>
+  <circle cx="600" cy="214" r="30" fill="#F5A623"/>
+  <circle cx="600" cy="214" r="13" fill="#FFD27A"/>
+  <text x="600" y="392" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="118" font-weight="700" letter-spacing="14" fill="#EDE6D6">GLOAM<tspan fill="#FFD27A">ING</tspan></text>
+  <text x="600" y="452" text-anchor="middle" font-family="'Space Mono', monospace" font-size="26" letter-spacing="10" fill="#8C8398">A  LIVING  BOARD  GAME</text>
+  <text x="600" y="528" text-anchor="middle" font-family="Spectral, Georgia, serif" font-size="30" font-style="italic" fill="#B9A7D6">The dark is eating the map. Light the Wards, reach the Heart —</text>
+  <text x="600" y="568" text-anchor="middle" font-family="Spectral, Georgia, serif" font-size="30" font-style="italic" fill="#B9A7D6">and pray it doesn't already know your name.</text>
+</svg>

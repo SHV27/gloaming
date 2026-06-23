@@ -628,6 +628,14 @@ export const useGame = create<GameState>()(
     {
       name: "gloaming-save-v3",
       version: STORE_VERSION,
+      // migration-safe: a stale/corrupt save can never white-screen — we validate the
+      // shape and fall back to a fresh state if anything is missing.
+      merge: (persisted, current) => {
+        const p = persisted as Partial<StateData> | undefined;
+        const board = p?.board as Board | undefined;
+        if (!p || !board || !Array.isArray(board.nodes) || board.nodes.length === 0 || !board.wardIds) return current;
+        return { ...current, ...p };
+      },
       partialize: (s): StateData => {
         const { newGame, beginPlay, rollMove, moveTo, startSearch, pressLuck, bankSearch, kindleWard, burnBack, shareToLantern, takeFromLantern, ritualStep, endTurn, dismissHaunt, resolveWhisper, reset, _wound, _spawnHollow, _endRound, _fireHaunt, _checkEnd, _recomputeHeart, _win, _lose, ...data } = s;
         void newGame; void beginPlay; void rollMove; void moveTo; void startSearch; void pressLuck; void bankSearch; void kindleWard; void burnBack; void shareToLantern; void takeFromLantern; void ritualStep; void endTurn; void dismissHaunt; void resolveWhisper; void reset; void _wound; void _spawnHollow; void _endRound; void _fireHaunt; void _checkEnd; void _recomputeHeart; void _win; void _lose;
