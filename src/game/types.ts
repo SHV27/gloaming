@@ -21,13 +21,16 @@ export interface Board {
   hollowSpawnId: string; // far edge
 }
 
+import type { RoleId } from "./roles";
+
 export interface Player {
   id: string;
   name: string;
+  role: RoleId;
   color: string;
   nodeId: string;
   light: number; // personal Light
-  wounds: number; // 3 = claimed
+  wounds: number; // role.woundsMax = claimed
   marked: boolean;
   alive: boolean; // false once Claimed
   escaped: boolean;
@@ -58,15 +61,25 @@ export interface SearchSession {
   lastToken: SearchToken | null;
 }
 
-// Haunt scenarios (kept from v1; full rewrites deferred to S3)
+// Haunt scenarios — each rewrites the stakes with real mechanics.
 export interface Scenario {
   id: string;
   name: string;
   subtitle: string;
   reveal: string;
+  rule: string; // one-line plain-language rule shown on the reveal & status
+  accent: string;
   dreadSpike: number;
   gloomSurge: number;
-  accent: string;
+  // mechanic flags (all optional; read at runtime, never persisted)
+  hollowDouble?: boolean; // Collector: double the Hunt on reveal
+  hollowSteal?: boolean; // Collector: Hollows steal Light on contact
+  gloomDouble?: boolean; // Flood: Gloom advances twice per round
+  wardDecay?: boolean; // Flood: unguarded Wards decay each round
+  mimicWard?: boolean; // Mimic: one Ward is false
+  longNight?: boolean; // Long Night: Dread frozen, whole board Tainted
+  lanternLeak?: number; // Famine: Lantern loses N each round
+  finite?: boolean; // The Gate is Narrow: limited escapes
 }
 
 export type DreadTier = "calm" | "ominous" | "menacing" | "devouring";

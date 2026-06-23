@@ -5,11 +5,12 @@ interface Props {
   name: string;
   subtitle: string;
   reveal: string;
+  rule: string;
   accent: string;
   onDismiss: () => void;
 }
 
-export default function HauntReveal({ name, subtitle, reveal, accent, onDismiss }: Props) {
+export default function HauntReveal({ name, subtitle, reveal, rule, accent, onDismiss }: Props) {
   const { shown, done } = useTypewriter(reveal, 22);
   return (
     <motion.div
@@ -33,9 +34,14 @@ export default function HauntReveal({ name, subtitle, reveal, accent, onDismiss 
           {shown}
         </motion.p>
         {done && (
-          <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} onClick={onDismiss} className="mt-6 rounded-xl border-2 px-10 py-3 font-display text-lg tracking-widest text-bone transition hover:bg-void/40" style={{ borderColor: accent, boxShadow: `0 0 40px -8px ${accent}` }}>
-            FACE IT
-          </motion.button>
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+            <p className="mx-auto mb-6 max-w-md rounded-lg border px-4 py-2 font-mono text-xs uppercase tracking-wider" style={{ borderColor: `${accent}88`, color: accent }}>
+              {rule}
+            </p>
+            <button onClick={onDismiss} className="rounded-xl border-2 px-10 py-3 font-display text-lg tracking-widest text-bone transition hover:bg-void/40" style={{ borderColor: accent, boxShadow: `0 0 40px -8px ${accent}` }}>
+              FACE IT
+            </button>
+          </motion.div>
         )}
       </div>
     </motion.div>

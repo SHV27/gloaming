@@ -93,6 +93,35 @@ progress; Heart shows locked vs open; Hollow reads as a predator; Marked player 
   rewired to Marked-targeting / finite-Gate scenarios this session.
 - Sound (Session 4).
 
+---
+
+## v3 — "Depth & Identity" (Session 3) — observed state + verdict
+
+**Observed after S2 (verified in code, build green):** turn loop = roll → move (3-state cost) → one Act
+(Search/Kindle/Burn/Ritual) → end; round end = Hunt steps (telegraphed) → Gloom advances → Dread rises →
+Haunt check. Win = 3 Wards → Heart opens → Ritual. Loud Dread clock, aware narrator, intro + objective
+tracker + first-time tooltips all present. Gaps: **no roles** (lobby is name-only), Haunt is a single trigger
+with **reveal-only** scenarios (no mechanics), **Whisper not tied to a finite-escape scenario**, win lets
+everyone alive escape (no finite payoff). S3 fills exactly these, without regressing S2's tension.
+
+**Locked plan:**
+- **Survivor roles (data-driven, `roles.ts`):** Lampwright (+1 Light/Search token), Cartographer (+1 move,
+  team foresight = predicted Gloom spread shown + Hunt telegraph), Warden (Burn costs 2, +1 max Wound),
+  Forsaken (Search collapses on the 3rd omen not the 2nd; Whisper always targets them). Each: color + sigil +
+  one-line fantasy; taught contextually on first use; narrator name-drops the role. Duplicates allowed.
+- **Haunt deck of 6 (real mechanics, keyed off `scenarioId` at runtime so functions never persist):**
+  Collector (Hunt doubles + Hollows steal Light), Flood (Gloom advances twice/round + unguarded Wards decay),
+  Mimic (one Ward false — kindling it spikes Dread and never counts; Heart opens on the 2 true Wards),
+  Long Night (Dread freezes but the whole board turns Tainted — a slog-sprint; flooding slows so it's survivable),
+  Famine (Lantern leaks each round), The Gate is Narrow (finite escape → triggers the Whisper).
+- **Whisper (3–4P, off by default, absent in 2P):** offered only in finite scenarios; targets alive Forsaken
+  first, else a Marked player, else random. Accept = secret sabotage (lantern/dread) + guaranteed exit.
+- **Finite escape + Ledger payoff:** in finite scenarios only those standing on the Heart at Ritual completion
+  escape (up to the Gate capacity; traitors already out count against it); the rest are Claimed. Ledger upgraded
+  to name each player's Survivor, reveal the Whisper choice, and render escaped/Claimed + a verdict — structured
+  as data (`buildLedger`) for S4's shareable card.
+- Save bumped to **v3** (Player gains `role`; new scenario/foresight fields).
+
 ## Architecture (locked, per §3)
 `src/game` (types, board, decks, scenarios, narrator, engine helpers) · `src/store` (zustand + persist) ·
 `src/components` (Lobby, Board, NarratorBar, PlayerPanel, CardDraw, OmenTrack, HauntReveal, WhisperScreen,

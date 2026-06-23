@@ -3,25 +3,17 @@ import { useGame } from "@/store/game";
 import { buildLedger } from "@/game/ledger";
 
 export default function Ledger() {
-  const { players, scenarioName, round, result, dread, log, reset } = useGame((s) => ({
-    players: s.players,
-    scenarioName: s.scenarioName,
-    round: s.round,
-    result: s.result,
-    dread: s.dread,
-    log: s.log,
-    reset: s.reset,
-  }));
+  const players = useGame((s) => s.players);
+  const scenarioName = useGame((s) => s.scenarioName);
+  const round = useGame((s) => s.round);
+  const result = useGame((s) => s.result);
+  const dread = useGame((s) => s.dread);
+  const finite = useGame((s) => s.finite);
+  const reset = useGame((s) => s.reset);
 
   const won = result === "win";
-  const ledger = buildLedger({
-    players,
-    scenarioName,
-    rounds: round,
-    won,
-    dread,
-    topLog: log.slice(-3).map((l) => l.text),
-  });
+  const ledger = buildLedger({ players, scenarioName, finite, rounds: round, won, dread });
+  const fateColor = (f: string) => (f === "escaped" ? "#8BE0B0" : f === "betrayed" ? "#C2412D" : "#8C8398");
 
   return (
     <div className="relative mx-auto flex min-h-[100svh] max-w-2xl flex-col items-center justify-center px-6 py-16">
@@ -67,24 +59,22 @@ export default function Ledger() {
         ))}
       </div>
 
+      {/* the roster — each Survivor, their role, and their fate */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 + ledger.verses.length * 0.5 }}
-        className="relative mt-10 flex flex-wrap justify-center gap-3"
+        className="relative mt-10 w-full max-w-lg space-y-2"
       >
-        {players.map((p) => (
-          <span
-            key={p.id}
-            className="rounded-full border px-4 py-1.5 font-mono text-xs tracking-wide"
-            style={{
-              borderColor: p.escaped ? p.color : "#3B2A57",
-              color: p.escaped ? p.color : "#8C8398",
-              opacity: p.escaped ? 1 : 0.6,
-            }}
-          >
-            {p.name} — {p.traitor ? "slipped away" : p.escaped ? "escaped" : "claimed"}
-          </span>
+        {ledger.roster.map((e, i) => (
+          <div key={i} className="flex items-center gap-3 rounded-xl border px-4 py-2.5" style={{ borderColor: e.fate === "claimed" ? "#2a1c44" : `${e.color}66`, opacity: e.fate === "claimed" ? 0.7 : 1 }}>
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm" style={{ background: `${e.color}22`, color: e.color, border: `1px solid ${e.color}` }}>{e.sigil}</span>
+            <span className="min-w-0 flex-1 font-body text-sm text-bone">
+              <span className="font-display tracking-wide">{e.name}</span>
+              <span className="ml-1.5 font-mono text-[0.55rem] uppercase tracking-wide text-ash">{e.roleName.replace("The ", "")}</span>
+            </span>
+            <span className="font-mono text-[0.65rem] uppercase tracking-widest" style={{ color: fateColor(e.fate) }}>{e.fate === "betrayed" ? "slipped away" : e.fate}</span>
+          </div>
         ))}
       </motion.div>
 

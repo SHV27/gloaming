@@ -15,6 +15,9 @@ interface Props {
   canMove: boolean;
   canBurn: boolean;
   accent: string | null;
+  heartOpen: boolean;
+  foresight: string[]; // Cartographer: tiles the Gloom takes next round
+  mimicRevealed: string | null; // ward id revealed as the Mimic
   onMove: (id: string) => void;
   onBurn: (id: string) => void;
 }
@@ -36,10 +39,14 @@ export default function Board({
   canMove,
   canBurn,
   accent,
+  heartOpen,
+  foresight,
+  mimicRevealed,
   onMove,
   onBurn,
 }: Props) {
   const reach = current ? new Set(neighbors(board, current.nodeId)) : new Set<string>();
+  const foresightSet = new Set(foresight);
   const playersOn = (id: string) => players.filter((p) => p.nodeId === id && p.alive && !p.escaped);
   const heartBright = 0.5 + (litWards / Math.max(1, board.wardIds.length)) * 0.5;
   const targets = players.filter((p) => p.alive && !p.escaped);
@@ -171,6 +178,14 @@ export default function Board({
         ) : null,
       )}
 
+      {/* Cartographer foresight — where the Gloom takes next round */}
+      {foresight.length > 0 &&
+        board.nodes
+          .filter((n) => foresightSet.has(n.id))
+          .map((n) => (
+            <motion.circle key={`fs-${n.id}`} cx={n.x} cy={n.y} r={n.kind === "heart" ? 30 : 18} fill="none" stroke="#7AB8FF" strokeWidth={1.5} strokeDasharray="1 5" animate={{ opacity: [0.15, 0.6, 0.15] }} transition={{ duration: 2, repeat: Infinity }} />
+          ))}
+
       {/* heart aura */}
       {(() => {
         const hh = board.nodes.find((n) => n.id === board.heartId)!;
@@ -219,8 +234,8 @@ export default function Board({
               <>
                 <motion.circle cx={n.x} cy={n.y} r={12} fill="#F5A623" filter="url(#glow)"
                   animate={{ opacity: [heartBright * 0.6, heartBright, heartBright * 0.6] }} transition={{ duration: Math.max(1, 4 - litWards), repeat: Infinity }} />
-                <text x={n.x} y={n.y - r - 8} textAnchor="middle" fontSize={11} fontFamily="'Space Mono'" fill={litWards >= board.wardIds.length ? "#FFD27A" : "#8C8398"}>
-                  {litWards >= board.wardIds.length ? "OPEN" : "LOCKED"}
+                <text x={n.x} y={n.y - r - 8} textAnchor="middle" fontSize={11} fontFamily="'Space Mono'" fill={heartOpen ? "#FFD27A" : "#8C8398"}>
+                  {heartOpen ? "OPEN" : "LOCKED"}
                 </text>
               </>
             )}
@@ -235,7 +250,8 @@ export default function Board({
                 <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize={11} fontFamily="'Space Mono'" fill={wardLit ? "#FFD27A" : "#EDE6D6"}>
                   {wardLit ? "✦" : `${wardProgress[n.id] ?? 0}/${wardGoal}`}
                 </text>
-                <text x={n.x} y={n.y + r + 16} textAnchor="middle" fontSize={9} fontFamily="'Space Mono'" fill="#8C8398">{n.label?.replace("The ", "")}</text>
+                <text x={n.x} y={n.y + r + 16} textAnchor="middle" fontSize={9} fontFamily="'Space Mono'" fill={mimicRevealed === n.id ? "#C2412D" : "#8C8398"}>{mimicRevealed === n.id ? "FALSE" : n.label?.replace("The ", "")}</text>
+                {mimicRevealed === n.id && <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize={13} fontFamily="'Space Mono'" fill="#C2412D">✕</text>}
               </>
             )}
 

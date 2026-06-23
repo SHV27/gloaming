@@ -17,6 +17,7 @@ export default function App() {
   const scenarioName = useGame((s) => s.scenarioName);
   const scenarioSubtitle = useGame((s) => s.scenarioSubtitle);
   const scenarioReveal = useGame((s) => s.scenarioReveal);
+  const scenarioRule = useGame((s) => s.scenarioRule);
   const accentColor = useGame((s) => s.accentColor);
   const dismissHaunt = useGame((s) => s.dismissHaunt);
   const whisperPlayerId = useGame((s) => s.whisperPlayerId);
@@ -38,7 +39,7 @@ export default function App() {
 
       <AnimatePresence>
         {phase === "HAUNT" && scenarioName && scenarioReveal && (
-          <HauntReveal key="haunt" name={scenarioName} subtitle={scenarioSubtitle ?? ""} reveal={scenarioReveal} accent={accentColor ?? "#7a5cff"} onDismiss={dismissHaunt} />
+          <HauntReveal key="haunt" name={scenarioName} subtitle={scenarioSubtitle ?? ""} reveal={scenarioReveal} rule={scenarioRule ?? ""} accent={accentColor ?? "#7a5cff"} onDismiss={dismissHaunt} />
         )}
       </AnimatePresence>
 

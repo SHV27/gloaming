@@ -28,6 +28,24 @@
   full Haunt per-scenario rule rewrites (reveal + Dread/Gloom spike kept), Marked-targeted finite-Gate Whisper
   (existing Whisper screen kept; now *prefers* a Marked target when offered).
 
+## Session 3 (v3 — "Depth & Identity") notes
+- Roles are fully data-driven in `roles.ts` (knobs: searchLightBonus, moveBonus, burnCost, woundsMax,
+  searchCollapseAt, foresight, whisperPriority). Add a Survivor = add an entry. Store reads `role(p.role)`
+  for every ability; wounds pips/burn cost are per-role in the UI.
+- Scenario mechanics live as flags on the `SCENARIOS` array and are read at runtime via
+  `scenarioById(scenarioId)` — functions/flags are NOT persisted (only scenarioId + display strings + the
+  derived `escapeSlots`). 6 scenarios, each changes win/lose math.
+- `gloom.ts` is the single source of truth for the Gloom advance; the Cartographer's foresight calls the
+  exact same pure fn to preview next round — guaranteed to match what actually happens.
+- **Bug caught in sim & fixed:** Long Night kept the Heart "lit" while only flooding Tainted tiles, so the
+  Heart could never flood and (Dread frozen) the scenario could stall forever. Fixed: longNight flood now
+  consumes any non-flooded neighbour, outer-first (creeping tide) → Heart falls ~round 11 = survivable sprint.
+- Finite escape (`_win`): only players on the Heart at Ritual completion escape, capped at gateCapacity =
+  players−1; traitors already out count against it. Non-finite scenarios keep the co-op "all alive escape".
+- Whisper: finite-only, 3–4P, target priority Forsaken → Marked → random. Accept = traitor + escaped + secret
+  lantern/dread sabotage. Absent in 2P (whisperMode forced off when <3 players).
+- Save bumped to `gloaming-save-v3` (Player gains `role`; new scenario/foresight/finite fields).
+
 ## Cut for time (ask for these next session)
 - Audio (ambient drone, dice, whispers) — hook left, behind a mute toggle.
 - Seeded/random board layouts — currently one hand-tuned 21-node board.

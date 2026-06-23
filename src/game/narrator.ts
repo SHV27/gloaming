@@ -19,6 +19,7 @@ export interface NarrateCtx {
   wards?: number; // wards lit so far
   recall?: string; // a referenced prior event, e.g. "the Western Ward you left dark"
   amount?: number;
+  role?: string; // the active Survivor's role name, e.g. "The Lampwright"
 }
 
 export type NarrationKind =
@@ -53,6 +54,7 @@ function fill(s: string, c: NarrateCtx): string {
     .replace(/\{wards\}/g, String(c.wards ?? 0))
     .replace(/\{amount\}/g, String(c.amount ?? 0))
     .replace(/\{recall\}/g, c.recall ?? "the lantern you left guttering")
+    .replace(/\{role\}/g, c.role ?? "the survivor")
     .replace(/\{other\}/g, c.others && c.others.length ? c.others[Math.floor(Math.random() * c.others.length)] : "the others");
 }
 
@@ -76,9 +78,9 @@ const BANKS: Record<NarrationKind, Bank> = {
     devouring: ["{name} sinks into the Gloom. I have been so patient for this.", "{name} enters the flood. Few things walk back out of me."],
   },
   searchLight: {
-    calm: ["{name} digs at {node} and finds light. For a breath, unafraid.", "Light at {node}. {name} hoards it like a secret."],
-    ominous: ["{name} pulls light from {node}. I let them. This time.", "A flame for {name}. The board notes the debt."],
-    menacing: ["{name} claws light from {node} as if it could save them. Charming.", "Light, yes. Enough? {name} already knows."],
+    calm: ["{name} digs at {node} and finds light. For a breath, unafraid.", "Light at {node}. {name} hoards it like a secret.", "{role} works the dark for light. Of course she does."],
+    ominous: ["{name} pulls light from {node}. I let them. This time.", "A flame for {name}. The board notes the debt.", "{role} gathers light. The board is counting every flame."],
+    menacing: ["{name} claws light from {node} as if it could save them. Charming.", "Light, yes. Enough? {name} already knows.", "Even {role} cannot dig fast enough now."],
     devouring: ["{name} clutches the last glow from {node}. I will want it back.", "A candle for {name}, against an ocean of me."],
   },
   searchRelic: {
@@ -112,7 +114,7 @@ const BANKS: Record<NarrationKind, Bank> = {
     devouring: ["{name} fed me the floor itself. A Hollow climbs out grinning, and {name} is so much weaker.", "Down it all comes on {name}. I told you. I always tell you."],
   },
   kindle: {
-    calm: ["{name} feeds light into {node}. The Ward stirs, reluctant.", "{name} kindles {node}. A warmth the dark hates wakes up."],
+    calm: ["{name} feeds light into {node}. The Ward stirs, reluctant.", "{name} kindles {node}. A warmth the dark hates wakes up.", "{role} pours light into {node}. This is the work that frightens me."],
     ominous: ["{name} kindles {node}. The dark feels it, and turns its head.", "Light pours into {node}. {name} is making the board angry. Good."],
     menacing: ["{name} kindles {node} while the Hunt closes. Reckless. Necessary.", "{node} brightens under {name}'s hands. The Gloom hisses."],
     devouring: ["{name} kindles {node} at the edge of the end. The dark screams through the walls.", "Light in {node}, this late. Defiant little flame, {name}."],
@@ -130,7 +132,7 @@ const BANKS: Record<NarrationKind, Bank> = {
     devouring: ["The Heart opens at the last. The dark howls. Reach it or drown reaching.", "Open. The way out is open. So is my mouth. Choose faster."],
   },
   burn: {
-    calm: ["{name} pours light into the dark at {node}, and the Gloom recoils.", "{name} burns the Gloom back. The board breathes a little wider."],
+    calm: ["{name} pours light into the dark at {node}, and the Gloom recoils.", "{name} burns the Gloom back. The board breathes a little wider.", "{role} holds the line at {node}. The dark gives ground, grudging."],
     ominous: ["{name} cleanses {node}. Bought ground. The dark will want it back.", "Light floods {node}. The Gloom shrinks from {name}, sullen."],
     menacing: ["{name} burns {node} clean as the tide presses. A finger in a breaking dam.", "{name} drives the Gloom from {node}. I have so much more of it."],
     devouring: ["{name} scours {node} with the last of the light. Futile. Beautiful.", "{name} burns me back one tile. I am everywhere else, {name}."],
