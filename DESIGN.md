@@ -55,6 +55,44 @@ prior events. Typewriter reveal in the NarratorBar.
 - LLM narrator adapter — leave `narrator.ts` clean enough to swap later, but no network tonight.
 - Animated manifestation creature art — represent manifestations as marked nodes + narration, not sprites.
 
+---
+
+## v2 VERDICT — "the real game" (locked, supersedes the above where they conflict)
+
+Source of truth is now `GLOAMING_RULEBOOK.md`. v1 ran but wasn't a *game*: invisible Gloom, no
+threat hunting you, no goal clarity, flat visuals. v2 fixes the fundamentals.
+
+**Goal (legible in 20s):** relight **3 Wards** → the **Heart** opens → finish the **Escape Ritual**
+before **Dread** hits 100. Always-on objective tracker. A 15s skippable in-world intro states it.
+
+**Two crossing pressures (the thrill):**
+- **The Gloom** — a living violet-black tide. Nodes are **Lit → Tainted → Flooded**. Each round end:
+  Tainted→Flooded, Lit-next-to-Gloom→Tainted; consumed count scales with Dread. The safe board shrinks.
+  Flooded costs movement + bites Light. THE signature visual (layered SVG turbulence/fog + tendrils + pulse).
+- **The Hunt** — **the Hollow**: mobile predators that BFS one step toward the nearest living player at
+  round end. **Path is telegraphed before it moves.** Contact = Wound + Marked. 3 Wounds = Claimed.
+
+**Push-your-luck Search (micro-loop):** draw from a node's pocket — Light (common) / Relic (rare) /
+Omen (uncommon). Press luck for more or bank. **2nd Omen in one Search = node collapses:** Hollow spawns,
+a Wound, banked gains lost. Every draw is a cheers/groans beat.
+
+**Loud Dread clock:** big rising tide meter, vignette that tightens, palette desaturates, heartbeat
+quickens as Dread climbs.
+
+**Aware narrator:** rewritten to name the player + node + the actual action just taken + prior events,
+escalating calm→ominous→menacing→devouring.
+
+**Node states & icons:** Lit (warm rim), Tainted (violet creep), Flooded (rot fog). Wards show kindle
+progress; Heart shows locked vs open; Hollow reads as a predator; Marked player flickers wrong.
+
+### Cut to Session 3 (explicitly deferred)
+- **Survivor roles** (Lampwright/Cartographer/Warden/Forsaken) — lobby stays name-entry for now.
+- **Full Haunt scenario-deck rewrites** (Collector/Flood/Mimic/etc. rule-changes) — the existing
+  cinematic Haunt reveal + a Dread spike are kept; per-scenario mechanic rewrites deferred.
+- **The Whisper** mechanics tied to the Marked player — the existing Whisper screen is kept but not
+  rewired to Marked-targeting / finite-Gate scenarios this session.
+- Sound (Session 4).
+
 ## Architecture (locked, per §3)
 `src/game` (types, board, decks, scenarios, narrator, engine helpers) · `src/store` (zustand + persist) ·
 `src/components` (Lobby, Board, NarratorBar, PlayerPanel, CardDraw, OmenTrack, HauntReveal, WhisperScreen,

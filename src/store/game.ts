@@ -1,18 +1,22 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Board, Card, LogEntry, Phase, Player } from "@/game/types";
-import { buildBoard, neighbors } from "@/game/board";
-import { CACHE_CARDS, HAZARD_CARDS, OMEN_CARDS, pick } from "@/game/decks";
+import type { Board, Hollow, LogEntry, NodeState, Phase, Player, SearchSession } from "@/game/types";
+import { buildBoard, neighbors, nodeById, shortestPath } from "@/game/board";
+import { drawToken } from "@/game/decks";
 import { SCENARIOS, drawScenario } from "@/game/scenarios";
 import { dreadTier, narrate } from "@/game/narrator";
 
 const PLAYER_COLORS = ["#F5A623", "#7AB8FF", "#8BE0B0", "#E083C0"];
 const OMEN_THRESHOLD = 5;
+const WARD_GOAL = 2;
+const RITUAL_GOAL = 3;
 const RITUAL_COST = 2;
-const CLEANSE_COST = 3;
-const START_LANTERN = 7;
+const KINDLE_COST = 1;
+const BURN_COST = 3;
+const START_LANTERN = 8;
 const START_LIGHT = 2;
-const STORE_VERSION = 1;
+const WOUNDS_MAX = 3;
+const STORE_VERSION = 2;
 
 interface GameState {
   version: number;
@@ -23,23 +27,25 @@ interface GameState {
   round: number;
   turnCount: number;
 
-  // turn sub-state
   movesLeft: number;
   rolled: boolean;
-  resolved: boolean;
   lastRoll: number | null;
-  cardDraw: Card | null;
+  acted: boolean; // the one primary Act (Search/Kindle/Burn/Ritual) this turn
 
-  // resources & pressure
+  nodeState: Record<string, NodeState>;
+  wardProgress: Record<string, number>;
+  wardGoal: number;
+  heartOpen: boolean;
+  ritualProgress: number;
+  ritualGoal: number;
+
+  hollows: Hollow[];
+  search: SearchSession | null;
+
   lantern: number;
   dread: number;
   omens: number;
 
-  // gloom
-  gloom: string[];
-  manifests: Record<string, string>;
-
-  // haunt (stored as primitives so persistence stays clean)
   hauntFired: boolean;
   scenarioId: string | null;
   scenarioName: string | null;
@@ -47,30 +53,28 @@ interface GameState {
   scenarioReveal: string | null;
   accentColor: string | null;
   gloomSurge: number;
-  ritualGoal: number;
-  ritualProgress: number;
-  escapeSlots: number;
 
-  // whisper
   whisperMode: boolean;
   whisperPlayerId: string | null;
   whisperOffered: boolean;
 
-  // narration
+  recall: string;
   narratorLine: string;
   log: LogEntry[];
-
   result: "win" | "lose" | null;
 
   // actions
   newGame: (names: string[], whisperMode: boolean) => void;
+  beginPlay: () => void;
   rollMove: () => void;
   moveTo: (nodeId: string) => void;
-  searchNode: () => void;
-  dismissCard: () => void;
-  cleanse: (nodeId: string) => void;
-  feedLantern: () => void;
-  takeLight: () => void;
+  startSearch: () => void;
+  pressLuck: () => void;
+  bankSearch: () => void;
+  kindleWard: () => void;
+  burnBack: (nodeId: string) => void;
+  shareToLantern: () => void;
+  takeFromLantern: () => void;
   ritualStep: () => void;
   endTurn: () => void;
   dismissHaunt: () => void;
@@ -78,51 +82,52 @@ interface GameState {
   reset: () => void;
 
   // internals
+  _wound: (playerId: string) => void;
+  _spawnHollow: (nodeId: string) => void;
+  _endRound: () => void;
   _fireHaunt: () => void;
-  _advanceGloom: () => void;
   _checkEnd: () => void;
   _win: () => void;
   _lose: () => void;
-  _endGame: () => void;
 }
 
-function freshBoard(): Board {
-  return buildBoard();
-}
-
-function logLine(s: GameState, text: string): LogEntry[] {
-  const entry: LogEntry = { turn: s.turnCount, round: s.round, text, tier: dreadTier(s.dread) };
-  return [...s.log.slice(-40), entry];
-}
-
-const initialNarration =
-  "You wake where the light ends. The board knows you are here. It always knew.";
-
-type StateData = Omit<GameState,
-  | "newGame" | "rollMove" | "moveTo" | "searchNode" | "dismissCard" | "cleanse"
-  | "feedLantern" | "takeLight" | "ritualStep" | "endTurn" | "dismissHaunt"
-  | "resolveWhisper" | "reset"
-  | "_fireHaunt" | "_advanceGloom" | "_checkEnd" | "_win" | "_lose" | "_endGame">;
+type StateData = Pick<
+  GameState,
+  | "version" | "phase" | "board" | "players" | "turnIndex" | "round" | "turnCount"
+  | "movesLeft" | "rolled" | "lastRoll" | "acted" | "nodeState" | "wardProgress" | "wardGoal"
+  | "heartOpen" | "ritualProgress" | "ritualGoal" | "hollows" | "search" | "lantern" | "dread"
+  | "omens" | "hauntFired" | "scenarioId" | "scenarioName" | "scenarioSubtitle" | "scenarioReveal"
+  | "accentColor" | "gloomSurge" | "whisperMode" | "whisperPlayerId" | "whisperOffered"
+  | "recall" | "narratorLine" | "log" | "result"
+>;
 
 function emptyInit(): StateData {
+  const board = buildBoard();
+  const nodeState: Record<string, NodeState> = {};
+  board.nodes.forEach((n) => (nodeState[n.id] = "lit"));
   return {
     version: STORE_VERSION,
     phase: "LOBBY",
-    board: freshBoard(),
+    board,
     players: [],
     turnIndex: 0,
     round: 1,
     turnCount: 0,
     movesLeft: 0,
     rolled: false,
-    resolved: false,
     lastRoll: null,
-    cardDraw: null,
+    acted: false,
+    nodeState,
+    wardProgress: {},
+    wardGoal: WARD_GOAL,
+    heartOpen: false,
+    ritualProgress: 0,
+    ritualGoal: RITUAL_GOAL,
+    hollows: [],
+    search: null,
     lantern: START_LANTERN,
     dread: 0,
     omens: 0,
-    gloom: [],
-    manifests: {},
     hauntFired: false,
     scenarioId: null,
     scenarioName: null,
@@ -130,16 +135,26 @@ function emptyInit(): StateData {
     scenarioReveal: null,
     accentColor: null,
     gloomSurge: 0,
-    ritualGoal: 5,
-    ritualProgress: 0,
-    escapeSlots: 99,
     whisperMode: false,
     whisperPlayerId: null,
     whisperOffered: false,
-    narratorLine: initialNarration,
+    recall: "the lantern you left guttering",
+    narratorLine: "You wake where the light ends. The board knows you are here. It always knew.",
     log: [],
     result: null,
   };
+}
+
+function logLine(s: GameState, text: string): LogEntry[] {
+  return [...s.log.slice(-40), { round: s.round, text, tier: dreadTier(s.dread) }];
+}
+
+function moveCost(state: NodeState): number {
+  return state === "flooded" ? 3 : state === "tainted" ? 2 : 1;
+}
+
+function activePlayers(players: Player[]): Player[] {
+  return players.filter((p) => p.alive && !p.escaped);
 }
 
 export const useGame = create<GameState>()(
@@ -148,176 +163,265 @@ export const useGame = create<GameState>()(
       ...emptyInit(),
 
       newGame: (names, whisperMode) => {
-        const board = freshBoard();
-        const spawns = [...board.spawnIds];
+        const base = emptyInit();
+        const board = base.board;
         const players: Player[] = names.map((name, i) => ({
           id: `p${i}`,
-          name: name.trim() || `Lantern ${i + 1}`,
+          name: name.trim() || `Wanderer ${i + 1}`,
           color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-          nodeId: spawns[i % spawns.length],
+          nodeId: board.thresholdId,
           light: START_LIGHT,
+          wounds: 0,
+          marked: false,
           alive: true,
           escaped: false,
           traitor: false,
         }));
+
+        // Gloom seeds the outer ring (not the players' threshold)
+        const outer = board.nodes.filter((n) => n.ring === 3 && n.id !== board.thresholdId);
+        const seeded = [...outer].sort(() => Math.random() - 0.5);
+        seeded.slice(0, 2).forEach((n) => (base.nodeState[n.id] = "flooded"));
+        seeded.slice(2, 4).forEach((n) => (base.nodeState[n.id] = "tainted"));
+
         set({
-          ...emptyInit(),
-          board,
+          ...base,
           players,
-          phase: "PLAY",
+          phase: "INTRO",
           whisperMode: whisperMode && players.length >= 3,
-          narratorLine: `The dark has counted you: ${players
-            .map((p) => p.name)
-            .join(", ")}. It is pleased with the number.`,
+          hollows: [{ id: "h0", nodeId: board.hollowSpawnId }],
+          narratorLine: `The dark has counted you: ${players.map((p) => p.name).join(", ")}. It is pleased with the number.`,
         });
       },
 
+      beginPlay: () => set({ phase: "PLAY" }),
+
       rollMove: () => {
         const s = get();
-        if (s.rolled || s.cardDraw) return;
-        const roll = 1 + Math.floor(Math.random() * 4); // a worn four-faced die
+        if (s.rolled || s.search) return;
+        const roll = 2 + Math.floor(Math.random() * 5); // d5+1 → 2..6
         set({ rolled: true, movesLeft: roll, lastRoll: roll });
       },
 
       moveTo: (nodeId) => {
         const s = get();
-        if (!s.rolled || s.resolved || s.movesLeft <= 0 || s.cardDraw) return;
+        if (!s.rolled || s.search) return;
         const p = s.players[s.turnIndex];
-        if (!p) return;
-        if (!neighbors(s.board, p.nodeId).includes(nodeId)) return;
+        if (!p || !neighbors(s.board, p.nodeId).includes(nodeId)) return;
+        const st = s.nodeState[nodeId] ?? "lit";
+        const cost = moveCost(st);
+        if (s.movesLeft < cost) return;
 
-        const intoGloom = s.gloom.includes(nodeId);
+        const bite = st === "flooded" ? 1 : 0;
         const players = s.players.map((pl) =>
-          pl.id === p.id ? { ...pl, nodeId, light: Math.max(0, pl.light - (intoGloom ? 1 : 0)) } : pl,
+          pl.id === p.id ? { ...pl, nodeId, light: Math.max(0, pl.light - bite) } : pl,
         );
-        const node = s.board.nodes.find((n) => n.id === nodeId);
-        const dread = intoGloom ? s.dread + 4 : s.dread;
-        const line = narrate("move", dread, {
+        const node = nodeById(s.board, nodeId);
+        const dread = st === "flooded" ? s.dread + 2 : s.dread;
+        const line = narrate(st === "lit" ? "move" : "moveGloom", dread, {
           name: p.name,
-          node: node?.label ?? "deeper dark",
-          turn: s.turnCount,
+          node: node.label ?? "deeper dark",
           round: s.round,
-          others: s.players.filter((x) => x.id !== p.id).map((x) => x.name),
+          recall: s.recall,
+          others: activePlayers(s.players).filter((x) => x.id !== p.id).map((x) => x.name),
         });
-        set({
-          players,
-          movesLeft: s.movesLeft - 1,
-          dread,
-          narratorLine: intoGloom
-            ? `${p.name} wades into the Gloom. It welcomes them by name.`
-            : line,
-          log: logLine({ ...s, dread }, line),
-        });
+        set({ players, movesLeft: s.movesLeft - cost, dread, narratorLine: line, log: logLine({ ...s, dread }, line) });
       },
 
-      searchNode: () => {
+      startSearch: () => {
         const s = get();
-        if (s.resolved || s.cardDraw) return;
+        if (s.acted || s.search || !s.rolled) return;
         const p = s.players[s.turnIndex];
         if (!p) return;
-        const node = s.board.nodes.find((n) => n.id === p.nodeId);
-        // bias the draw by what kind of place this is
-        let card: Card;
-        const r = Math.random();
-        if (node?.kind === "cache") card = r < 0.7 ? pick(CACHE_CARDS) : pick(OMEN_CARDS);
-        else if (node?.kind === "hazard") card = r < 0.65 ? pick(HAZARD_CARDS) : pick(OMEN_CARDS);
-        else if (node?.kind === "lantern") card = r < 0.6 ? pick(CACHE_CARDS) : pick(HAZARD_CARDS);
-        else card = r < 0.4 ? pick(CACHE_CARDS) : r < 0.75 ? pick(HAZARD_CARDS) : pick(OMEN_CARDS);
-        set({ cardDraw: card, resolved: true, movesLeft: 0 });
-      },
-
-      dismissCard: () => {
-        const s = get();
-        const card = s.cardDraw;
-        if (!card) return;
-        const p = s.players[s.turnIndex];
-        let lantern = s.lantern + (card.lantern ?? 0);
-        let dread = s.dread + (card.dread ?? 0);
-        let omens = s.omens + (card.omen ?? 0);
-        lantern = Math.max(0, lantern);
-        const players = s.players.map((pl) =>
-          pl.id === p?.id ? { ...pl, light: Math.max(0, pl.light + (card.light ?? 0)) } : pl,
-        );
-        const manifests = { ...s.manifests };
-        if (card.manifest && p) manifests[p.nodeId] = card.manifest;
-
-        const node = s.board.nodes.find((n) => n.id === p?.nodeId);
-        const kind = card.kind === "omen" || card.kind === "manifest" ? "omen" : card.kind === "boon" ? "cache" : card.kind;
-        const line = narrate(kind as "cache" | "hazard" | "omen", dread, {
-          name: p?.name,
-          node: node?.label ?? "the dark",
-          turn: s.turnCount,
-          round: s.round,
-          omens,
-          others: s.players.filter((x) => x.id !== p?.id).map((x) => x.name),
-        });
-
-        const next: Partial<GameState> = {
-          cardDraw: null,
-          lantern,
-          dread,
-          omens,
-          players,
-          manifests,
-          narratorLine: line,
-          log: logLine({ ...s, dread, omens }, line),
+        const node = nodeById(s.board, p.nodeId);
+        const token = drawToken(node.kind);
+        const session: SearchSession = {
+          nodeId: p.nodeId,
+          draws: [token],
+          bankedLight: token.kind === "omen" ? 0 : token.light ?? 0,
+          omensThisSearch: token.kind === "omen" ? 1 : 0,
+          collapsed: false,
+          lastToken: token,
         };
-        set(next);
-
-        // Haunt trigger
-        if (!s.hauntFired && omens >= OMEN_THRESHOLD) {
-          get()._fireHaunt();
+        // omens immediately bump the track + dread, even if you bank after
+        let omens = s.omens;
+        let dread = s.dread;
+        if (token.kind === "omen") {
+          omens += 1;
+          dread += 3;
         }
-        get()._checkEnd();
+        const kind = token.kind === "omen" ? "searchOmen" : token.kind === "relic" ? "searchRelic" : "searchLight";
+        const line = narrate(kind, dread, { name: p.name, node: node.label ?? "the dark", omens, round: s.round });
+        set({ search: session, omens, dread, narratorLine: line, log: logLine({ ...s, omens, dread }, line) });
+        if (!s.hauntFired && omens >= OMEN_THRESHOLD) get()._fireHaunt();
       },
 
-      cleanse: (nodeId) => {
+      pressLuck: () => {
         const s = get();
-        if (s.cardDraw || s.lantern < CLEANSE_COST) return;
+        if (!s.search || s.search.collapsed) return;
         const p = s.players[s.turnIndex];
         if (!p) return;
-        if (!s.gloom.includes(nodeId)) return;
-        if (nodeId !== p.nodeId && !neighbors(s.board, p.nodeId).includes(nodeId)) return;
-        const gloom = s.gloom.filter((g) => g !== nodeId);
-        const dread = Math.max(0, s.dread - 3);
-        const line = `${p.name} pours light into the dark and, for one breath, the Gloom recoils.`;
+        const node = nodeById(s.board, s.search.nodeId);
+        const token = drawToken(node.kind);
+        const omensThisSearch = s.search.omensThisSearch + (token.kind === "omen" ? 1 : 0);
+
+        // a second omen in one Search → the node collapses
+        if (token.kind === "omen" && omensThisSearch >= 2) {
+          let omens = s.omens + 1;
+          let dread = s.dread + 6;
+          const session: SearchSession = {
+            ...s.search,
+            draws: [...s.search.draws, token],
+            omensThisSearch,
+            collapsed: true,
+            lastToken: token,
+          };
+          const line = narrate("collapse", dread, { name: p.name, node: node.label ?? "here", omens, round: s.round });
+          set({
+            search: session,
+            omens,
+            dread,
+            acted: true,
+            recall: `${node.label ?? "the place"} that caved under ${p.name}`,
+            narratorLine: line,
+            log: logLine({ ...s, omens, dread }, line),
+          });
+          get()._spawnHollow(s.search.nodeId);
+          get()._wound(p.id);
+          if (!s.hauntFired && omens >= OMEN_THRESHOLD) get()._fireHaunt();
+          get()._checkEnd();
+          return;
+        }
+
+        let omens = s.omens;
+        let dread = s.dread;
+        if (token.kind === "omen") {
+          omens += 1;
+          dread += 3;
+        }
+        const session: SearchSession = {
+          ...s.search,
+          draws: [...s.search.draws, token],
+          bankedLight: s.search.bankedLight + (token.kind === "omen" ? 0 : token.light ?? 0),
+          omensThisSearch,
+          lastToken: token,
+        };
+        const kind = token.kind === "omen" ? "searchOmen" : token.kind === "relic" ? "searchRelic" : "searchLight";
+        const line = narrate(kind, dread, { name: p.name, node: node.label ?? "the dark", omens, round: s.round });
+        set({ search: session, omens, dread, narratorLine: line, log: logLine({ ...s, omens, dread }, line) });
+        if (!s.hauntFired && omens >= OMEN_THRESHOLD) get()._fireHaunt();
+      },
+
+      bankSearch: () => {
+        const s = get();
+        if (!s.search) return;
+        const p = s.players[s.turnIndex];
+        const collapsed = s.search.collapsed;
+        if (collapsed) {
+          set({ search: null });
+          return;
+        }
+        const gainedLantern = s.search.draws.reduce((a, t) => a + (t.kind !== "omen" ? t.lantern ?? 0 : 0), 0);
+        const players = s.players.map((pl) =>
+          pl.id === p?.id ? { ...pl, light: pl.light + s.search!.bankedLight } : pl,
+        );
+        const line = narrate("bank", s.dread, { name: p?.name, node: nodeById(s.board, s.search.nodeId).label, round: s.round });
         set({
-          gloom,
-          lantern: s.lantern - CLEANSE_COST,
-          dread,
+          players,
+          lantern: s.lantern + gainedLantern,
+          search: null,
+          acted: true,
           narratorLine: line,
-          log: logLine({ ...s, dread }, line),
+          log: logLine(s, line),
         });
       },
 
-      feedLantern: () => {
+      kindleWard: () => {
+        const s = get();
+        if (s.acted || s.search) return;
+        const p = s.players[s.turnIndex];
+        if (!p || !s.board.wardIds.includes(p.nodeId)) return;
+        const lit = (s.wardProgress[p.nodeId] ?? 0) >= s.wardGoal;
+        if (lit) return;
+        // pay 1 Light: personal first, then Lantern
+        let light = p.light;
+        let lantern = s.lantern;
+        if (light >= KINDLE_COST) light -= KINDLE_COST;
+        else if (lantern >= KINDLE_COST) lantern -= KINDLE_COST;
+        else return;
+
+        const wardProgress = { ...s.wardProgress, [p.nodeId]: (s.wardProgress[p.nodeId] ?? 0) + 1 };
+        const players = s.players.map((pl) => (pl.id === p.id ? { ...pl, light } : pl));
+        const node = nodeById(s.board, p.nodeId);
+        const nowLit = wardProgress[p.nodeId] >= s.wardGoal;
+        const litCount = s.board.wardIds.filter((w) => (wardProgress[w] ?? 0) >= s.wardGoal).length;
+        const allLit = litCount === s.board.wardIds.length;
+
+        let line: string;
+        if (allLit) line = narrate("heartOpen", s.dread, { name: p.name, node: node.label, wards: litCount, round: s.round });
+        else if (nowLit) line = narrate("wardLit", s.dread, { name: p.name, node: node.label, wards: litCount, round: s.round });
+        else line = narrate("kindle", s.dread, { name: p.name, node: node.label, wards: litCount, round: s.round });
+
+        set({
+          wardProgress,
+          players,
+          lantern,
+          acted: true,
+          heartOpen: allLit || s.heartOpen,
+          recall: nowLit ? `${node.label} you lit at last` : `${node.label}, still dark`,
+          narratorLine: line,
+          log: logLine(s, line),
+        });
+      },
+
+      burnBack: (nodeId) => {
+        const s = get();
+        if (s.acted || s.search || s.lantern < BURN_COST) return;
+        const p = s.players[s.turnIndex];
+        if (!p) return;
+        const st = s.nodeState[nodeId] ?? "lit";
+        if (st === "lit") return;
+        if (nodeId !== p.nodeId && !neighbors(s.board, p.nodeId).includes(nodeId)) return;
+        const node = nodeById(s.board, nodeId);
+        const line = narrate("burn", s.dread, { name: p.name, node: node.label ?? "the dark", round: s.round });
+        set({
+          nodeState: { ...s.nodeState, [nodeId]: "lit" },
+          lantern: s.lantern - BURN_COST,
+          dread: Math.max(0, s.dread - 2),
+          acted: true,
+          narratorLine: line,
+          log: logLine(s, line),
+        });
+      },
+
+      shareToLantern: () => {
         const s = get();
         const p = s.players[s.turnIndex];
-        if (!p || p.light <= 0 || s.cardDraw) return;
+        if (!p || p.light <= 0 || s.search) return;
+        const line = narrate("share", s.dread, { name: p.name, others: activePlayers(s.players).filter((x) => x.id !== p.id).map((x) => x.name) });
         set({
           lantern: s.lantern + 1,
           players: s.players.map((pl) => (pl.id === p.id ? { ...pl, light: pl.light - 1 } : pl)),
-          narratorLine: `${p.name} feeds the shared lantern. A small, dangerous generosity.`,
+          narratorLine: line,
         });
       },
 
-      takeLight: () => {
+      takeFromLantern: () => {
         const s = get();
         const p = s.players[s.turnIndex];
-        if (!p || s.lantern <= 0 || s.cardDraw) return;
+        if (!p || s.lantern <= 0 || s.search) return;
         set({
           lantern: s.lantern - 1,
           players: s.players.map((pl) => (pl.id === p.id ? { ...pl, light: pl.light + 1 } : pl)),
-          narratorLine: `${p.name} takes from the shared lantern. The others notice. They always notice.`,
+          narratorLine: `${p.name} takes from the shared Lantern. The others notice. They always notice.`,
         });
       },
 
       ritualStep: () => {
         const s = get();
-        if (!s.hauntFired || s.cardDraw) return;
+        if (s.acted || s.search || !s.heartOpen) return;
         const p = s.players[s.turnIndex];
         if (!p || p.nodeId !== s.board.heartId) return;
-        // pay from shared lantern first, then personal
         let lantern = s.lantern;
         let players = s.players;
         if (lantern >= RITUAL_COST) lantern -= RITUAL_COST;
@@ -325,40 +429,19 @@ export const useGame = create<GameState>()(
           const fromPersonal = RITUAL_COST - lantern;
           lantern = 0;
           players = s.players.map((pl) => (pl.id === p.id ? { ...pl, light: pl.light - fromPersonal } : pl));
-        } else return; // not enough light anywhere; gather more
+        } else return;
 
         const ritualProgress = s.ritualProgress + 1;
-        const line = narrate("ritual", s.dread, {
-          name: p.name,
-          others: s.players.filter((x) => x.id !== p.id).map((x) => x.name),
-          round: s.round,
-        });
-        set({
-          lantern,
-          players,
-          ritualProgress,
-          phase: "CLIMAX",
-          narratorLine: line,
-          log: logLine(s, line),
-        });
-        if (ritualProgress >= s.ritualGoal) {
-          get()._win();
-        }
+        const line = narrate("ritual", s.dread, { name: p.name, round: s.round, others: activePlayers(s.players).filter((x) => x.id !== p.id).map((x) => x.name) });
+        set({ lantern, players, ritualProgress, acted: true, phase: "CLIMAX", narratorLine: line, log: logLine(s, line) });
+        if (ritualProgress >= s.ritualGoal) get()._win();
       },
 
       endTurn: () => {
         const s = get();
-        if (s.cardDraw || s.result) return;
-        if (!s.resolved && s.rolled) {
-          // force a resolution so a turn is never skipped silently
-          get().searchNode();
-          return;
-        }
-        // advance to the next alive, non-escaped player
+        if (s.search || s.result) return;
         const n = s.players.length;
         let idx = s.turnIndex;
-        let round = s.round;
-        let turnCount = s.turnCount + 1;
         let endOfRound = false;
         for (let i = 1; i <= n; i++) {
           const cand = (s.turnIndex + i) % n;
@@ -369,27 +452,23 @@ export const useGame = create<GameState>()(
             break;
           }
         }
-        const everyoneOut = s.players.every((p) => !p.alive || p.escaped);
-        set({ turnIndex: idx, rolled: false, resolved: false, movesLeft: 0, lastRoll: null, turnCount });
-
+        const everyoneOut = activePlayers(s.players).length === 0;
+        set({ turnIndex: idx, rolled: false, acted: false, movesLeft: 0, lastRoll: null, turnCount: s.turnCount + 1 });
         if (everyoneOut) {
-          get()._endGame();
+          if (s.ritualProgress >= s.ritualGoal) get()._win();
+          else get()._lose();
           return;
         }
-        if (endOfRound) {
-          round += 1;
-          set({ round });
-          get()._advanceGloom();
-        }
+        if (endOfRound) get()._endRound();
       },
 
       dismissHaunt: () => {
         const s = get();
-        set({ phase: "PLAY" });
-        // offer the Whisper once, after the Haunt, in 3-4P with mode on
-        if (s.whisperMode && !s.whisperOffered && s.players.filter((p) => p.alive).length >= 3) {
-          const candidates = s.players.filter((p) => p.alive && !p.escaped);
-          const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+        set({ phase: s.heartOpen || s.ritualProgress > 0 ? "CLIMAX" : "PLAY" });
+        if (s.whisperMode && !s.whisperOffered && activePlayers(s.players).length >= 3) {
+          const marked = activePlayers(s.players).filter((p) => p.marked);
+          const pool = marked.length ? marked : activePlayers(s.players);
+          const chosen = pool[Math.floor(Math.random() * pool.length)];
           set({ whisperPlayerId: chosen.id, whisperOffered: true });
         }
       },
@@ -398,22 +477,18 @@ export const useGame = create<GameState>()(
         const s = get();
         const pid = s.whisperPlayerId;
         if (!pid) return;
+        const name = s.players.find((p) => p.id === pid)?.name ?? "someone";
         if (accept) {
-          const players = s.players.map((pl) => (pl.id === pid ? { ...pl, traitor: true, escaped: true } : pl));
-          const name = s.players.find((p) => p.id === pid)?.name ?? "someone";
           const dread = s.dread + 8;
           set({
-            players,
+            players: s.players.map((pl) => (pl.id === pid ? { ...pl, traitor: true, escaped: true } : pl)),
             whisperPlayerId: null,
             dread,
             lantern: Math.max(0, s.lantern - 1),
             narratorLine: `A door opens for ${name} alone. No one else sees it. The board keeps the secret, as it keeps everything.`,
             log: logLine({ ...s, dread }, `${name} accepted the Whisper.`),
           });
-          // if that was the last active player, wrap up
-          if (s.players.every((p) => p.id === pid || !p.alive || p.escaped)) get()._endGame();
         } else {
-          const name = s.players.find((p) => p.id === pid)?.name ?? "someone";
           set({
             whisperPlayerId: null,
             narratorLine: `${name} refuses the dark's kindness. The board respects loyalty the way a fire respects paper.`,
@@ -423,7 +498,107 @@ export const useGame = create<GameState>()(
 
       reset: () => set({ ...emptyInit() }),
 
-      // ---- internals (not in the public type but reachable) ----
+      // ---- internals ----
+      _wound: (playerId) => {
+        const s = get();
+        const target = s.players.find((p) => p.id === playerId);
+        if (!target || !target.alive) return;
+        const wounds = target.wounds + 1;
+        const claimed = wounds >= WOUNDS_MAX;
+        const players = s.players.map((p) =>
+          p.id === playerId ? { ...p, wounds, marked: true, alive: !claimed } : p,
+        );
+        let nodeState = s.nodeState;
+        let line: string;
+        if (claimed) {
+          nodeState = { ...s.nodeState, [target.nodeId]: s.nodeState[target.nodeId] === "lit" ? "tainted" : s.nodeState[target.nodeId] };
+          line = narrate("claimed", s.dread, { name: target.name, others: activePlayers(players).map((x) => x.name) });
+        } else {
+          line = narrate("hollowHit", s.dread, { name: target.name });
+        }
+        set({ players, nodeState, recall: `the mark the dark set on ${target.name}`, narratorLine: line, log: logLine(s, line) });
+      },
+
+      _spawnHollow: (nodeId) => {
+        const s = get();
+        set({ hollows: [...s.hollows, { id: `h${s.hollows.length}-${Date.now() % 9999}`, nodeId }] });
+      },
+
+      _endRound: () => {
+        const s = get();
+        const round = s.round + 1;
+
+        // 1) THE HUNT MOVES
+        let players = s.players;
+        const hollows = s.hollows.map((h) => {
+          const targets = activePlayers(players);
+          if (!targets.length) return h;
+          const marked = targets.filter((t) => t.marked);
+          const pool = marked.length ? marked : targets;
+          let best: string | null = null;
+          let bestLen = Infinity;
+          for (const t of pool) {
+            const path = shortestPath(s.board, h.nodeId, t.nodeId);
+            if (path.length > 1 && path.length < bestLen) {
+              bestLen = path.length;
+              best = path[1];
+            } else if (path.length === 1 && bestLen === Infinity) {
+              best = h.nodeId; // already on a target
+            }
+          }
+          return { ...h, nodeId: best ?? h.nodeId };
+        });
+
+        // hollow contact
+        const hitIds = new Set<string>();
+        hollows.forEach((h) => {
+          activePlayers(players).forEach((p) => {
+            if (p.nodeId === h.nodeId) hitIds.add(p.id);
+          });
+        });
+
+        // 2) THE GLOOM ADVANCES (3-state spread, scales with dread)
+        const nodeState: Record<string, NodeState> = { ...s.nodeState };
+        const spread = 1 + s.gloomSurge + Math.floor(round / 4) + (s.dread >= 55 ? 1 : 0) + (s.dread >= 82 ? 1 : 0);
+        // tainted → flooded (closest to Heart first)
+        const tainted = s.board.nodes.filter((n) => nodeState[n.id] === "tainted").sort((a, b) => a.ring - b.ring);
+        tainted.slice(0, spread).forEach((n) => (nodeState[n.id] = "flooded"));
+        // lit adjacent to Gloom → tainted (outer first)
+        const frontier = s.board.nodes
+          .filter((n) => nodeState[n.id] === "lit" && neighbors(s.board, n.id).some((m) => nodeState[m] !== "lit"))
+          .sort((a, b) => b.ring - a.ring);
+        frontier.slice(0, spread).forEach((n) => (nodeState[n.id] = "tainted"));
+
+        // players standing in fresh flood lose light
+        players = players.map((p) => {
+          if (p.alive && !p.escaped && nodeState[p.nodeId] === "flooded") return { ...p, light: Math.max(0, p.light - 1) };
+          return p;
+        });
+
+        // 3) DREAD RISES
+        const floodedNearHeart = s.board.nodes.filter((n) => n.ring <= 1 && nodeState[n.id] === "flooded").length;
+        const dread = Math.min(100, s.dread + 6 + s.omens + floodedNearHeart * 2);
+
+        const targetNames = activePlayers(players).map((p) => p.name);
+        const huntLine = narrate("hollowMove", dread, { others: targetNames, round });
+        set({
+          round,
+          players,
+          hollows,
+          nodeState,
+          dread,
+          narratorLine: huntLine,
+          log: logLine({ ...s, dread, round }, narrate("gloom", dread, { others: targetNames, round })),
+        });
+
+        // apply hollow wounds after state set
+        hitIds.forEach((id) => get()._wound(id));
+
+        // 4) OMEN / HAUNT CHECK
+        if (!s.hauntFired && get().omens >= OMEN_THRESHOLD) get()._fireHaunt();
+        get()._checkEnd();
+      },
+
       _fireHaunt: () => {
         const s = get();
         const scen = drawScenario();
@@ -436,109 +611,34 @@ export const useGame = create<GameState>()(
           scenarioSubtitle: scen.subtitle,
           scenarioReveal: scen.reveal,
           accentColor: scen.accent,
-          ritualGoal: scen.ritualGoal,
           gloomSurge: scen.gloomSurge,
-          escapeSlots: scen.escapeCapacity(s.players.length),
           dread,
           narratorLine: scen.reveal,
           log: logLine({ ...s, dread }, `THE HAUNT: ${scen.name}`),
         });
       },
 
-      _advanceGloom: () => {
-        const s = get();
-        const flooded = new Set(s.gloom);
-        const count = 1 + s.gloomSurge + Math.floor(s.round / 3);
-
-        // frontier: unflooded nodes adjacent to flooded; if nothing flooded yet,
-        // the Gloom enters from the outermost ring.
-        let frontier: typeof s.board.nodes;
-        if (flooded.size === 0) {
-          frontier = s.board.nodes.filter((n) => n.ring === 3);
-        } else {
-          frontier = s.board.nodes.filter(
-            (n) => !flooded.has(n.id) && neighbors(s.board, n.id).some((m) => flooded.has(m)),
-          );
-        }
-        // prefer outer (higher ring) so it reads as marching inward
-        frontier.sort((a, b) => b.ring - a.ring || Math.random() - 0.5);
-        const toFlood = frontier.slice(0, count).map((n) => n.id);
-        toFlood.forEach((id) => flooded.add(id));
-
-        // shove players caught by the new flood toward safety
-        let players = s.players;
-        let dread = s.dread;
-        toFlood.forEach((id) => {
-          players = players.map((pl) => {
-            if (pl.nodeId !== id || !pl.alive || pl.escaped) return pl;
-            const safe = neighbors(s.board, id).find((m) => !flooded.has(m));
-            dread += 6;
-            return { ...pl, nodeId: safe ?? id, light: Math.max(0, pl.light - 2) };
-          });
-        });
-
-        // dread always rises with the night; faster with more omens
-        dread = Math.min(100, dread + 3 + s.omens);
-        const line = narrate("gloom", dread, {
-          others: s.players.filter((p) => p.alive && !p.escaped).map((p) => p.name),
-          round: s.round,
-        });
-        set({
-          gloom: [...flooded],
-          players,
-          dread,
-          narratorLine: line,
-          log: logLine({ ...s, dread }, line),
-        });
-        get()._checkEnd();
-      },
-
       _checkEnd: () => {
         const s = get();
         if (s.result) return;
-        if (s.gloom.includes(s.board.heartId) || s.dread >= 100) {
-          get()._lose();
-        }
+        const heartFlooded = s.nodeState[s.board.heartId] === "flooded";
+        if (heartFlooded || s.dread >= 100 || activePlayers(s.players).length === 0) get()._lose();
       },
 
       _win: () => {
         const s = get();
-        // who gets out: traitors already escaped; fill remaining slots by nearness to the Heart
-        const slots = s.escapeSlots;
-        const alreadyOut = s.players.filter((p) => p.escaped).length;
-        const remaining = Math.max(0, slots - alreadyOut);
-        const heart = s.board.heartId;
-        const contenders = s.players
-          .filter((p) => p.alive && !p.escaped)
-          .sort((a, b) => {
-            const da = a.nodeId === heart ? 0 : neighbors(s.board, heart).includes(a.nodeId) ? 1 : 2;
-            const db = b.nodeId === heart ? 0 : neighbors(s.board, heart).includes(b.nodeId) ? 1 : 2;
-            return da - db || b.light - a.light;
-          });
-        const winners = new Set(contenders.slice(0, remaining).map((p) => p.id));
-        const players = s.players.map((p) =>
-          p.escaped ? p : { ...p, escaped: winners.has(p.id) },
-        );
+        const players = s.players.map((p) => (p.escaped ? p : p.alive ? { ...p, escaped: true } : p));
         set({ players, phase: "END", result: "win" });
       },
 
       _lose: () => {
         const s = get();
-        // the dark takes everyone who didn't already slip out through a Whisper door
         const players = s.players.map((p) => (p.traitor ? p : { ...p, escaped: false, alive: false }));
         set({ players, phase: "END", result: "lose" });
       },
-
-      _endGame: () => {
-        const s = get();
-        if (s.result) return;
-        // everyone is out (escaped or claimed) without a ritual win → judge by ritual progress
-        if (s.ritualProgress >= s.ritualGoal) get()._win();
-        else get()._lose();
-      },
     }),
     {
-      name: "gloaming-save-v1",
+      name: "gloaming-save-v2",
       version: STORE_VERSION,
       partialize: (s): StateData => ({
         version: s.version,
@@ -550,14 +650,19 @@ export const useGame = create<GameState>()(
         turnCount: s.turnCount,
         movesLeft: s.movesLeft,
         rolled: s.rolled,
-        resolved: s.resolved,
         lastRoll: s.lastRoll,
-        cardDraw: s.cardDraw,
+        acted: s.acted,
+        nodeState: s.nodeState,
+        wardProgress: s.wardProgress,
+        wardGoal: s.wardGoal,
+        heartOpen: s.heartOpen,
+        ritualProgress: s.ritualProgress,
+        ritualGoal: s.ritualGoal,
+        hollows: s.hollows,
+        search: s.search,
         lantern: s.lantern,
         dread: s.dread,
         omens: s.omens,
-        gloom: s.gloom,
-        manifests: s.manifests,
         hauntFired: s.hauntFired,
         scenarioId: s.scenarioId,
         scenarioName: s.scenarioName,
@@ -565,12 +670,10 @@ export const useGame = create<GameState>()(
         scenarioReveal: s.scenarioReveal,
         accentColor: s.accentColor,
         gloomSurge: s.gloomSurge,
-        ritualGoal: s.ritualGoal,
-        ritualProgress: s.ritualProgress,
-        escapeSlots: s.escapeSlots,
         whisperMode: s.whisperMode,
         whisperPlayerId: s.whisperPlayerId,
         whisperOffered: s.whisperOffered,
+        recall: s.recall,
         narratorLine: s.narratorLine,
         log: s.log,
         result: s.result,
@@ -579,7 +682,8 @@ export const useGame = create<GameState>()(
   ),
 );
 
-// re-derive the live scenario object (with its functions) when needed
 export function scenarioFor(id: string | null) {
   return SCENARIOS.find((s) => s.id === id) ?? null;
 }
+
+export const CONSTS = { OMEN_THRESHOLD, WARD_GOAL, RITUAL_GOAL, BURN_COST, KINDLE_COST, WOUNDS_MAX };

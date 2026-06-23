@@ -14,6 +14,20 @@
   (417 modules), dev server boots and transforms `main.tsx`/`App.tsx` with no errors, plus an engine
   invariant smoke test (connectivity / flood-termination / scenario caps).
 
+## Session 2 (v2 — "the real game") notes
+- Reworked to the rulebook: 3-state nodes (lit/tainted/flooded as a `Record<id,state>`), Wards→Heart→Ritual
+  win path, the Hollow (BFS `shortestPath` hunt, telegraphed in Board), push-luck Search (a `SearchSession`
+  sub-state machine; 2nd omen in one search = collapse → spawn Hollow + wound + lose banked), wounds→Marked
+  →Claimed, loud Dread clock (DreadAtmosphere: vignette + backdrop saturate + heartbeat), aware narrator
+  (per-action banks + recall slot), Intro + always-on objective tracker (StatusBar) + first-time tooltips
+  (separate `gloaming-hints-v2` store so they survive a game reset).
+- **Save bumped to `gloaming-save-v2`** — v1 saves are a different shape and are simply ignored (no migration).
+- Re-verified by headless sim against the real board: win path reachable, Hunt path legal, Gloom floods the
+  Heart by ~round 11 (always terminates), push-luck distribution makes collapse possible but not guaranteed.
+- Deferred to S3 (kept minimal-but-present where it already existed): Survivor roles (lobby still name-entry),
+  full Haunt per-scenario rule rewrites (reveal + Dread/Gloom spike kept), Marked-targeted finite-Gate Whisper
+  (existing Whisper screen kept; now *prefers* a Marked target when offered).
+
 ## Cut for time (ask for these next session)
 - Audio (ambient drone, dice, whispers) — hook left, behind a mute toggle.
 - Seeded/random board layouts — currently one hand-tuned 21-node board.

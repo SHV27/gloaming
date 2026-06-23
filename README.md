@@ -8,10 +8,11 @@ No backend. No API keys. No accounts. One static page, one screen, one room of p
 
 ## Signature moments
 
-- **The Gloom advance** — at the end of every round the darkness floods inward across the SVG board with a living, animated fog. The map *visibly shrinks*. You can feel the walls closing.
-- **The Haunt** — fill the Omen track and the board reveals its true scheme for this session, drawn from a deck of 6 scenarios (The Collector, The Flood, The Mimic, The Long Night, The Bargain, The Harvest). The world's color shifts, Dread jolts, and the rules sharpen. Every game tells a different story.
-- **The Whisper** *(3–4 players, optional)* — the board privately offers **one** player a clean way out, in exchange for betraying the rest. Delivered Jackbox-style: *"Hand the device to {name}."* Everyone else looks away.
-- **The Ledger** — however it ends, the run is narrated back as a dark fable that names every name and every choice. Built to be screenshotted and dropped in the group chat.
+- **Two crossing pressures.** The **Gloom** is a living violet-black tide — nodes go Lit → Tainted → Flooded, and the safe board *visibly shrinks* inward every round. Meanwhile **the Hollow** hunt you: faceless predators that pathfind one step toward the nearest living survivor each round — and their route is **telegraphed before they move**, so you watch death close in.
+- **Push-your-luck Search.** Dig a tile for Light. Press your luck for more… but a **second Omen in one Search collapses the tile** — a Hollow spawns, you take a Wound, and everything you banked is lost. Every draw is a cheers-or-groans beat.
+- **The goal is legible in 20 seconds.** Relight **3 Wards** (kindle them together with Light) → the **Heart opens** → finish the **Escape Ritual** before **Dread** hits 100. An always-on tracker and a 15-second in-world intro tell you exactly what to do.
+- **Dread you feel in your body.** As the meter climbs the palette desaturates, a vignette tightens, and a heartbeat quickens until the whole screen feels like it's closing in.
+- **The Haunt + the Ledger.** Fill the Omen track and the board fully wakes — a cinematic scheme reveal that recolors the world and spikes Dread. However it ends, the run is narrated back as a dark fable that names every name and choice, built to be screenshotted.
 
 ## The living narrator
 
@@ -20,10 +21,10 @@ The board talks. It addresses players **by name**, references where you are and 
 ## How to play
 
 1. Enter 2–4 names. (3+ unlocks the Whisper.)
-2. On your turn: **roll** the worn four-faced die, **move** along the lit paths, then **search** where you land — caches give Light, hazards bite, omens wake the Haunt.
-3. Spend and share **Light**: feed the shared lantern or take from it, burn the Gloom back from a tile beside you, or pour it into the ritual at the Heart.
-4. At the end of each round the **Gloom advances** and **Dread rises**.
-5. Get someone onto the **Heart** and speak the full ritual before Dread maxes or the dark floods the Heart.
+2. On your turn: **roll**, **move** along the paths (Tainted tiles cost extra, Flooded ones bite your Light), then take **one action**: **Search** (push-your-luck), **Kindle a Ward** you're standing on, or **Burn the Gloom back** from an adjacent tile. Feed/Take Light from the shared Lantern freely.
+3. Light all **3 Wards** to open the **Heart**, then get someone onto the Heart and **speak the Escape Ritual** to completion.
+4. At the end of each round: **the Hunt moves**, **the Gloom advances**, and **Dread rises**. Watch the telegraphed Hollow paths and don't get cornered — 3 Wounds and you're Claimed.
+5. Escape before Dread hits 100 or the Gloom floods the Heart.
 
 A refresh never kills a game — state persists to `localStorage`.
 

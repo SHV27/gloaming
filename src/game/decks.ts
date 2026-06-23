@@ -1,42 +1,51 @@
-import type { Card } from "./types";
+import type { NodeKind, SearchToken, TokenKind } from "./types";
 
-// The Manifestation deck. Hand-authored, in-voice. Drawn on node resolution.
-// Weighted by appearing multiple times implicitly via the spread of kinds.
-export const MANIFESTATION_DECK: Card[] = [
-  // caches — the Light you live and die by
-  { id: "c1", title: "A Guttering Candle", kind: "cache", text: "Someone left it burning. You cup the flame and carry it on.", light: 2 },
-  { id: "c2", title: "The Forgotten Lantern", kind: "cache", text: "Oil still in the well. The dark hates this.", light: 3 },
-  { id: "c3", title: "Embers in the Ash", kind: "cache", text: "You breathe on them until they remember how to glow.", light: 2 },
-  { id: "c4", title: "A Match, the Last One", kind: "cache", text: "One strike. One chance. It catches.", light: 1, lantern: 1 },
-  { id: "c5", title: "Phosphor Bloom", kind: "boon", text: "Pale fungus lights the wall. Cold, but it counts.", light: 2 },
-  { id: "c6", title: "The Keeper's Tithe", kind: "cache", text: "An old offering bowl, still full of light.", lantern: 3 },
-
-  // hazards — the dark bites back
-  { id: "h1", title: "A Hand from the Floor", kind: "hazard", text: "It closes around your ankle. You tear free, but it took something.", light: -2, dread: 4 },
-  { id: "h2", title: "The Cold That Thinks", kind: "hazard", text: "It studies you. The studying is the wound.", dread: 6 },
-  { id: "h3", title: "Spilled Oil", kind: "hazard", text: "Your light runs out across the stone and drowns.", light: -2 },
-  { id: "h4", title: "The Long Fall", kind: "hazard", text: "The floor was never there. You climb back up changed.", light: -1, dread: 5 },
-  { id: "h5", title: "Whispering Mold", kind: "hazard", text: "It says your name in your own voice. You drop the lantern.", lantern: -2, dread: 3 },
-  { id: "h6", title: "A Door That Wasn't", kind: "hazard", text: "You walk through it and arrive nowhere good.", dread: 5 },
-
-  // omens — the Haunt creeps closer
-  { id: "o1", title: "The Clock With No Hands", kind: "omen", text: "It ticks anyway. Something is counting down to you.", omen: 1, dread: 2 },
-  { id: "o2", title: "Thirteen Crows, One Eye", kind: "omen", text: "They turn to watch as one. The board is taking notes.", omen: 1, dread: 2 },
-  { id: "o3", title: "The Mirror Lies", kind: "omen", text: "Your reflection is one step behind. Then it isn't.", omen: 1, dread: 3 },
-  { id: "o4", title: "A Tooth in the Bread", kind: "omen", text: "Not yours. Not anyone's you'd want to meet.", omen: 1, light: 1 },
-  { id: "o5", title: "The Names on the Wall", kind: "omen", text: "Scratched fresh. Yours is being added even now.", omen: 2, dread: 4 },
-
-  // manifestations — they spawn and stay
-  { id: "m1", title: "THE GNAW", kind: "manifest", text: "It uncurls from the corner. It is hungry and it is patient.", manifest: "The Gnaw", dread: 5, omen: 1 },
-  { id: "m2", title: "THE HOLLOW CHOIR", kind: "manifest", text: "Voices with no mouths fill the room. They learn the hymn quickly.", manifest: "The Hollow Choir", dread: 4, lantern: -1 },
-  { id: "m3", title: "THE TALL VISITOR", kind: "manifest", text: "It has to fold to fit the doorway. It does not mind folding.", manifest: "The Tall Visitor", dread: 6, omen: 1 },
+// Search "pocket" tokens. Drawn one at a time in the push-your-luck Search.
+const LIGHT_TOKENS: SearchToken[] = [
+  { kind: "light", title: "A Guttering Candle", text: "Cupped against the dark. It holds.", light: 1 },
+  { kind: "light", title: "Oil in the Well", text: "Enough to keep a flame honest a while longer.", light: 2 },
+  { kind: "light", title: "Embers in the Ash", text: "You breathe on them until they remember.", light: 1 },
+  { kind: "light", title: "Phosphor Bloom", text: "Cold pale fungus-light. It still counts.", light: 1 },
+  { kind: "light", title: "The Keeper's Tithe", text: "An offering bowl, still full.", light: 2, lantern: 1 },
 ];
 
-// distinct piles so we can bias draws by node kind without losing variety
-export const CACHE_CARDS = MANIFESTATION_DECK.filter((c) => c.kind === "cache" || c.kind === "boon");
-export const HAZARD_CARDS = MANIFESTATION_DECK.filter((c) => c.kind === "hazard");
-export const OMEN_CARDS = MANIFESTATION_DECK.filter((c) => c.kind === "omen" || c.kind === "manifest");
+const RELIC_TOKENS: SearchToken[] = [
+  { kind: "relic", title: "Wardbreaker Salt", text: "Flung at the nearest dark, it recoils — a tile burns clean.", lantern: 0 },
+  { kind: "relic", title: "The Long Match", text: "A flare that feeds the shared Lantern and pushes the Gloom back a step.", lantern: 2 },
+  { kind: "relic", title: "A Saint's Knuckle", text: "Old bone, warm to the touch. The dark gives you room.", lantern: 1, light: 1 },
+];
+
+const OMEN_TOKENS: SearchToken[] = [
+  { kind: "omen", title: "The Clock With No Hands", text: "It ticks anyway. Counting down to you.", light: 1 },
+  { kind: "omen", title: "Thirteen Crows, One Eye", text: "They turn to watch as one.", light: 0 },
+  { kind: "omen", title: "The Mirror Lies", text: "Your reflection is one step behind. Then it isn't.", light: 0 },
+  { kind: "omen", title: "The Names on the Wall", text: "Scratched fresh. Yours is being added.", light: 0 },
+];
 
 export function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Probability of each token kind, biased by the node's nature.
+function weights(kind: NodeKind | undefined): Record<TokenKind, number> {
+  switch (kind) {
+    case "cache":
+      return { light: 0.7, relic: 0.16, omen: 0.14 };
+    case "hazard":
+      return { light: 0.42, relic: 0.08, omen: 0.5 };
+    case "threshold":
+      return { light: 0.55, relic: 0.1, omen: 0.35 };
+    case "ward":
+      return { light: 0.5, relic: 0.12, omen: 0.38 };
+    default:
+      return { light: 0.58, relic: 0.1, omen: 0.32 };
+  }
+}
+
+export function drawToken(kind: NodeKind | undefined): SearchToken {
+  const w = weights(kind);
+  const r = Math.random();
+  if (r < w.omen) return pick(OMEN_TOKENS);
+  if (r < w.omen + w.relic) return pick(RELIC_TOKENS);
+  return pick(LIGHT_TOKENS);
 }

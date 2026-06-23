@@ -1,7 +1,7 @@
 import type { Board, BoardNode, NodeKind } from "./types";
 
 // A hand-tuned concentric layout. The Heart sits at the center of a vortex;
-// the Gloom spirals inward from the outer lantern-ring. Fixed = handsome & debuggable.
+// the Gloom spirals inward from the outer threshold-ring. Fixed = handsome & debuggable.
 const CX = 500;
 const CY = 360;
 
@@ -9,7 +9,7 @@ interface RingSpec {
   count: number;
   radius: number;
   ring: number;
-  rot: number; // rotation offset (radians)
+  rot: number;
 }
 
 const RINGS: RingSpec[] = [
@@ -45,14 +45,12 @@ export function buildBoard(): Board {
   const heart: BoardNode = { id: "heart", x: CX, y: CY, ring: 0, kind: "heart", label: "The Heart" };
   nodes.push(heart);
 
-  // ring layout
   const byRing: Record<number, BoardNode[]> = {};
   RINGS.forEach((spec) => {
     const list: BoardNode[] = [];
     for (let i = 0; i < spec.count; i++) {
       const a = spec.rot + (i / spec.count) * Math.PI * 2;
       const id = `r${spec.ring}n${i}`;
-      // gentle organic jitter so it doesn't read as a perfect machine circle
       const jr = spec.radius + (i % 2 === 0 ? 10 : -8);
       const node: BoardNode = {
         id,
@@ -67,46 +65,51 @@ export function buildBoard(): Board {
     byRing[spec.ring] = list;
   });
 
-  // assign kinds: outer ring = lanterns (spawns), then sprinkle caches/hazards
-  const spawnIds: string[] = [];
-  byRing[3].forEach((n, i) => {
-    if (i % 2 === 0) {
-      n.kind = "lantern";
-      n.label = "Lantern";
-      spawnIds.push(n.id);
-    }
+  // 3 Wards on the middle ring, spread ~120° apart (between edge and Heart)
+  const wardIdx = [0, 3, 5];
+  const wardIds: string[] = [];
+  const wardNames = ["The Eastern Ward", "The Western Ward", "The Hollow Ward"];
+  wardIdx.forEach((wi, k) => {
+    const n = byRing[2][wi];
+    n.kind = "ward";
+    n.label = wardNames[k];
+    wardIds.push(n.id);
   });
-  // guarantee at least 4 spawns
-  byRing[3].forEach((n) => {
-    if (spawnIds.length < 4 && n.kind !== "lantern") {
-      n.kind = "lantern";
-      n.label = "Lantern";
-      spawnIds.push(n.id);
-    }
+  // remaining ring-2 nodes: caches/hazards
+  byRing[2].forEach((n) => {
+    if (n.kind === "ward") return;
+    n.kind = Math.random() < 0.5 ? "cache" : "hazard";
   });
-  // caches in ring 2, hazards mixed
-  byRing[2].forEach((n, i) => {
-    if (i % 3 === 0) n.kind = "cache";
-    else if (i % 3 === 1) n.kind = "hazard";
-  });
+  // inner ring: mixed pockets
   byRing[1].forEach((n, i) => {
     n.kind = i % 2 === 0 ? "cache" : "plain";
   });
+  // outer ring: thresholds (the edge / where survivors begin & Gloom enters)
+  byRing[3].forEach((n) => {
+    n.kind = "threshold";
+    n.label = "Threshold";
+  });
 
-  // edges: heart -> inner ring
+  // edges
   byRing[1].forEach((n) => addEdge("heart", n.id));
-  // ring adjacency (polygon loops) for each ring
   [1, 2, 3].forEach((r) => {
     const list = byRing[r];
     list.forEach((n, i) => addEdge(n.id, list[(i + 1) % list.length].id));
   });
-  // radial connections by angle proximity
   byRing[1].forEach((n) => nearestByAngle(n, byRing[2], 2).forEach((m) => addEdge(n.id, m.id)));
   byRing[2].forEach((n) => nearestByAngle(n, byRing[3], 1).forEach((m) => addEdge(n.id, m.id)));
-  // a couple of extra ring2->ring3 spokes so the outer ring isn't a bottleneck
   byRing[3].forEach((n) => nearestByAngle(n, byRing[2], 2).forEach((m) => addEdge(n.id, m.id)));
 
-  return { nodes, edges, heartId: "heart", spawnIds };
+  // survivors begin together on one threshold; the Hollow spawns opposite them
+  const thresholdId = byRing[3][0].id;
+  const start = byRing[3][0];
+  const hollowSpawn = [...byRing[3]].sort((a, b) => {
+    const da = Math.hypot(a.x - start.x, a.y - start.y);
+    const db = Math.hypot(b.x - start.x, b.y - start.y);
+    return db - da;
+  })[0];
+
+  return { nodes, edges, heartId: "heart", wardIds, thresholdId, hollowSpawnId: hollowSpawn.id };
 }
 
 export function neighbors(board: Board, id: string): string[] {
@@ -122,4 +125,30 @@ export function nodeById(board: Board, id: string): BoardNode {
   const n = board.nodes.find((x) => x.id === id);
   if (!n) throw new Error(`unknown node ${id}`);
   return n;
+}
+
+// BFS shortest path from -> to (inclusive). Returns [] if unreachable.
+export function shortestPath(board: Board, from: string, to: string): string[] {
+  if (from === to) return [from];
+  const prev: Record<string, string | null> = { [from]: null };
+  const q = [from];
+  while (q.length) {
+    const cur = q.shift()!;
+    for (const nb of neighbors(board, cur)) {
+      if (!(nb in prev)) {
+        prev[nb] = cur;
+        if (nb === to) {
+          const path: string[] = [];
+          let c: string | null = nb;
+          while (c) {
+            path.unshift(c);
+            c = prev[c];
+          }
+          return path;
+        }
+        q.push(nb);
+      }
+    }
+  }
+  return [];
 }
